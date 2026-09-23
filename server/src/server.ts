@@ -38,12 +38,7 @@ const ADMIN_SESSION_SECRET = process.env.ADMIN_SESSION_SECRET || '';
 const ADMIN_EMAIL_ALLOWLIST = new Set(
   (process.env.ADMIN_EMAIL_ALLOWLIST || '').split(',').map((email) => email.trim().toLowerCase()).filter(Boolean)
 );
-console.log('Admin config:', {
-  hasAccessCode: Boolean(ADMIN_ACCESS_CODE),
-  hasSessionSecret: Boolean(ADMIN_SESSION_SECRET),
-  emailsCount: ADMIN_EMAIL_ALLOWLIST.size,
-  emails: [...ADMIN_EMAIL_ALLOWLIST],
-});
+ -
 const SESSION_COOKIE = 'flaner_admin_session';
 const SESSION_TTL_SECONDS = 60 * 60 * 8;
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
@@ -140,8 +135,27 @@ app.post('/api/admin/login', (req, res) => {
   if (attempt && attempt.resetAt > now && attempt.count >= 5) return res.status(429).json({ error: 'Too many attempts. Try again in 15 minutes.' });
   const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
   const code = typeof req.body?.code === 'string' ? req.body.code : '';
-  const configured = Boolean(ADMIN_ACCESS_CODE && ADMIN_SESSION_SECRET && ADMIN_EMAIL_ALLOWLIST.size);
-  const matchesCode = configured && code.length === ADMIN_ACCESS_CODE.length && crypto.timingSafeEqual(Buffer.from(code), Buffer.from(ADMIN_ACCESS_CODE));
+const configured = Boolean(
+  ADMIN_ACCESS_CODE &&
+  ADMIN_SESSION_SECRET &&
+  ADMIN_EMAIL_ALLOWLIST.size
+);
+
+console.log('Login debug:', {
+  email,
+  codeLength: code.length,
+  configured,
+  emailAllowed: ADMIN_EMAIL_ALLOWLIST.has(email),
+  envCodeLength: ADMIN_ACCESS_CODE.length,
+});
+
+const matchesCode =
+  configured &&
+  code.length === ADMIN_ACCESS_CODE.length &&
+  crypto.timingSafeEqual(
+    Buffer.from(code),
+    Buffer.from(ADMIN_ACCESS_CODE)
+  );
   if (!configured || !ADMIN_EMAIL_ALLOWLIST.has(email) || !matchesCode) {
     loginAttempts.set(ip, { count: attempt && attempt.resetAt > now ? attempt.count + 1 : 1, resetAt: now + 15 * 60 * 1000 });
     return res.status(401).json({ error: 'Invalid email or access code' });
