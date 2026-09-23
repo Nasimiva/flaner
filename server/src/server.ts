@@ -429,7 +429,7 @@ app.get('/api/telegram/logs', requireAdmin, (req, res) => {
 
 if (process.env.NODE_ENV === 'production') {
   // Serve the built client files from ../client/dist
-  const clientDist = path.join(import.meta.dirname, '../../client/dist');
+  const clientDist = path.join(process.cwd(), 'client', 'dist');
   app.use(express.static(clientDist));
   app.get('*', (req, res) => {
     res.sendFile(path.join(clientDist, 'index.html'));
