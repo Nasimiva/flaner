@@ -38,6 +38,12 @@ const ADMIN_SESSION_SECRET = process.env.ADMIN_SESSION_SECRET || '';
 const ADMIN_EMAIL_ALLOWLIST = new Set(
   (process.env.ADMIN_EMAIL_ALLOWLIST || '').split(',').map((email) => email.trim().toLowerCase()).filter(Boolean)
 );
+console.log('Admin config:', {
+  hasAccessCode: Boolean(ADMIN_ACCESS_CODE),
+  hasSessionSecret: Boolean(ADMIN_SESSION_SECRET),
+  emailsCount: ADMIN_EMAIL_ALLOWLIST.size,
+  emails: [...ADMIN_EMAIL_ALLOWLIST],
+});
 const SESSION_COOKIE = 'flaner_admin_session';
 const SESSION_TTL_SECONDS = 60 * 60 * 8;
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
@@ -423,3 +429,4 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`Mode: ${process.env.NODE_ENV || 'development'}`);
   console.log(`Telegram Bot integration ${TELEGRAM_BOT_TOKEN ? 'configured ✓' : 'not configured (set TELEGRAM_BOT_TOKEN)'}`);
 });
+//asd
