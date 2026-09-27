@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
+import { createProductRoutes } from './productRoutes.js';
 
 dotenv.config();
 
@@ -14,11 +15,16 @@ app.use(express.json({ limit: '100kb' }));
 // CORS: allow requests from the Vite dev server in development
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (process.env.NODE_ENV !== 'production' && origin) {
+  const allowedOrigins = new Set(
+    (process.env.CORS_ORIGINS || '').split(',').map((value) => value.trim()).filter(Boolean)
+  );
+  const originAllowed = process.env.NODE_ENV !== 'production' || (origin && allowedOrigins.has(origin));
+  if (origin && originAllowed) {
+    res.vary('Origin');
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Access-Control-Allow-Credentials', 'true');
     res.header('Access-Control-Allow-Headers', 'Content-Type');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   }
   res.header('X-Content-Type-Options', 'nosniff');
   res.header('X-Frame-Options', 'SAMEORIGIN');
@@ -122,6 +128,8 @@ async function sendTelegramMessage(chatId: string | number, text: string, parseM
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', name: 'flaner_cosmetics' });
 });
+
+app.use('/api/products', createProductRoutes(requireAdmin));
 
 app.get('/api/admin/session', (req, res) => {
   const session = verifySession(getCookie(req, SESSION_COOKIE));
@@ -443,4 +451,4 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`Mode: ${process.env.NODE_ENV || 'development'}`);
   console.log(`Telegram Bot integration ${TELEGRAM_BOT_TOKEN ? 'configured ✓' : 'not configured (set TELEGRAM_BOT_TOKEN)'}`);
 });
-//asd
+  
