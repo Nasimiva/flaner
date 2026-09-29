@@ -32,3 +32,14 @@ Never use pure white or pure black backgrounds.
 ## Photo rules
 
 Warm colour grade, gentle contrast, no clutter, no app UI, no pure white. Gold packaging and black leather are the hero materials.
+
+## Light variant: "Blush Plaster" (used for the Hourglass palettes cover)
+
+| Name | Hex | Use |
+|---|---|---|
+| Blush Plaster | `#E5D9CC` | Background with fine plaster grain |
+| Espresso Brown | `#4A3626` | Headline, CTA |
+| Dusty Rose | `#A86864` | Italic sub-headline, one accent per cover |
+| Warm Taupe | `#8C7662` | Small spaced-out labels |
+
+Products sit directly on the background with feathered edges: no frames, no boxes. One large thin serif word, one italic line, one small CTA.
