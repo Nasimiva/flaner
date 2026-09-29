@@ -13,7 +13,8 @@ WINE, WHITE = (74, 24, 36), (255, 255, 255)
 CX, CY = W // 2, H // 2
 SQUEEZE = 0.80                       # horizontal scale that makes Liberation Sans Bold look condensed
 COVERS = [("gisou", ["GISOU"]), ("boxes", ["БОКСЫ"]), ("new", ["НОВИНКИ"]),
-          ("reviews", ["ОТЗЫВЫ"]), ("advent-calendar", ["ADVENT", "CALENDAR"])]
+          ("reviews", ["ОТЗЫВЫ"]), ("advent-calendar", ["ADVENT", "CALENDAR"]),
+          ("jo-malone", ["JO", "MALONE"])]
 
 def condensed_line(text, size):
     f = ImageFont.truetype(BOLD, size * S)
@@ -53,7 +54,7 @@ if __name__ == "__main__":
     out = sys.argv[1] if len(sys.argv) > 1 else "design/highlights-white"
     os.makedirs(out, exist_ok=True)
     imgs = [cover(lines, f"{out}/{i:02d}-{name.lower()}") for i, (name, lines) in enumerate(COVERS, 1)]
-    sheet = Image.new("RGB", (5 * 300 + 60, 540 + 20), (12, 16, 24))
+    sheet = Image.new("RGB", (len(imgs) * 310 + 10, 560), (12, 16, 24))
     for i, im in enumerate(imgs):
         sheet.paste(im.resize((300, 533), Image.LANCZOS), (10 + i * 310, 10))
     sheet.save(f"{out}/sheet.png")
