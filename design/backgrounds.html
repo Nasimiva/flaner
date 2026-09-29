@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>flaner_cosmetics backgrounds</title>
+<style>
+:root{--cream:#f1e6d3;--beige:#d9c7ab;--taupe:#b9a48a;--gold:#c9a86a;--rose:#d9b3a5}
+body{margin:0;padding:24px;background:#e8dcc8;font-family:Georgia,serif;color:#6b5a44;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:24px}
+.card{aspect-ratio:4/5;border-radius:6px;position:relative;overflow:hidden;box-shadow:0 10px 30px #6b5a4433}
+.card span{position:absolute;left:14px;bottom:10px;font-size:12px;letter-spacing:.15em;text-transform:uppercase}
+.window{position:absolute;inset:0;background:linear-gradient(115deg,#fff6e4aa 0%,#fff6e400 55%)}
+/* 1 plaster + travertine podium */
+.b1{background:radial-gradient(ellipse at 20% 10%,#f6ecda,#e7d8bf 70%),var(--cream)}
+.b1 .pod{position:absolute;left:22%;right:22%;bottom:16%;height:34%;border-radius:50% 50% 8px 8px/16% 16% 8px 8px;background:repeating-linear-gradient(0deg,#d8c5a6 0 6px,#cdb894 6px 8px,#dfceb0 8px 16px);box-shadow:18px 14px 30px #6b5a4444}
+.b1 .cp{position:absolute;left:32%;right:32%;bottom:49%;height:13%;border-radius:8px;background:linear-gradient(135deg,#e6cf9b,#b8934f);box-shadow:8px 8px 18px #6b5a4455}
+/* 2 velvet */
+.b2{background:radial-gradient(circle at 30% 20%,#efe2cc,#d7c3a3 80%)}
+.b2 .fold{position:absolute;inset:0;background:repeating-linear-gradient(105deg,#ffffff14 0 22px,#8a6f4c14 22px 46px)}
+.b2 .cp{position:absolute;left:24%;right:24%;top:34%;height:26%;border-radius:8px;background:linear-gradient(135deg,#ecd6a4,#b8934f);box-shadow:10px 12px 24px #5b432855}
+.b2 .lip{position:absolute;right:14%;top:66%;width:5%;height:16%;border-radius:3px;background:linear-gradient(#c9a86a 40%,var(--rose) 40%)}
+/* 3 still life */
+.b3{background:linear-gradient(160deg,#eadcc4,#c2ae93)}
+.b3 .tray{position:absolute;left:14%;right:14%;bottom:20%;height:9%;border-radius:50%;background:linear-gradient(#e7d09b,#b99450);box-shadow:0 18px 28px #5b432855}
+.b3 .slab{position:absolute;left:20%;right:20%;bottom:10%;height:10%;background:repeating-linear-gradient(0deg,#d6c3a3 0 5px,#c9b491 5px 7px)}
+.b3 .bot{position:absolute;left:58%;width:10%;bottom:28%;height:26%;border-radius:6px 6px 3px 3px;background:linear-gradient(90deg,#f3e6cd,#d6bd88)}
+/* 4 empty backdrop */
+.b4{background:linear-gradient(#efe3cf 0 68%,#cdb894 68% 100%)}
+.b4 .rail{position:absolute;left:12%;right:12%;top:18%;height:3px;background:linear-gradient(90deg,#b8934f,#f0dca8,#b8934f);box-shadow:0 6px 8px #5b432840}
+.b4 .rose{position:absolute;inset:0;background:radial-gradient(circle at 85% 30%,#d9b3a533,#0000 50%)}
+</style></head><body>
+<div class="card b1"><div class="window"></div><div class="pod"></div><div class="cp"></div><span>01 Podium</span></div>
+<div class="card b2"><div class="fold"></div><div class="cp"></div><div class="lip"></div><span>02 Velvet</span></div>
+<div class="card b3"><div class="window"></div><div class="slab"></div><div class="tray"></div><div class="bot"></div><span>03 Still life</span></div>
+<div class="card b4"><div class="window"></div><div class="rose"></div><div class="rail"></div><span>04 Backdrop</span></div>
+</body></html>
