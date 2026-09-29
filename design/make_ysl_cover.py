@@ -39,7 +39,7 @@ def enhance(src_path, box, size):
     if bgr is None:  # cv2 cannot read webp on some builds
         bgr = cv2.cvtColor(np.asarray(Image.open(src_path).convert("RGB")), cv2.COLOR_RGB2BGR)
     mask = np.zeros(bgr.shape[:2], np.uint8)
-    mask[832:870, 428:468] = 255                     # sound button in the screenshot
+    mask[1090:1140, 528:578] = 255                   # sound button in the screenshot
     bgr = cv2.inpaint(bgr, mask, 5, cv2.INPAINT_TELEA)
     x0, y0, x1, y1 = box
     crop = bgr[y0:y1, x0:x1]
@@ -56,11 +56,11 @@ def enhance(src_path, box, size):
 
 def main(src, out):
     bg = plaster().convert("RGBA")
-    aw, ah = 760, 1120
-    photo = enhance(src, (100, 330, 474, 879), (aw, ah))
+    aw, ah = 700, 1125
+    photo = enhance(src, (150, 440, 589, 1146), (aw, ah))
     photo = ImageEnhance.Color(photo).enhance(0.92)
     photo = ImageEnhance.Contrast(photo).enhance(1.05)
-    ax, ay = (W - aw) // 2, 530
+    ax, ay = (W - aw) // 2, 540
 
     mask = Image.new("L", (aw, ah), 0)                      # arch window
     m = ImageDraw.Draw(mask)
