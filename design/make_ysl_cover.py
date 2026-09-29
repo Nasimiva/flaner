@@ -4,6 +4,7 @@ Usage: python3 design/make_ysl_cover.py <photo> [out.png]
 Photo crop box below is tuned for the flaner_cosmetics YSL table screenshot.
 """
 import sys
+import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageEnhance
 
@@ -32,14 +33,34 @@ def spaced(d, xy, text, font, fill, track=0, anchor="c"):
         d.text((x, y), c, font=font, fill=fill)
         x += w + track
 
+def enhance(src_path, box, size):
+    """Clean the UI overlay, upscale in two steps, then recover local contrast and detail."""
+    bgr = cv2.imread(src_path)
+    if bgr is None:  # cv2 cannot read webp on some builds
+        bgr = cv2.cvtColor(np.asarray(Image.open(src_path).convert("RGB")), cv2.COLOR_RGB2BGR)
+    mask = np.zeros(bgr.shape[:2], np.uint8)
+    mask[832:870, 428:468] = 255                     # sound button in the screenshot
+    bgr = cv2.inpaint(bgr, mask, 5, cv2.INPAINT_TELEA)
+    x0, y0, x1, y1 = box
+    crop = bgr[y0:y1, x0:x1]
+    w, h = size
+    mid = cv2.resize(crop, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+    mid = cv2.bilateralFilter(mid, 5, 25, 5)          # smooth compression blocks
+    big = cv2.resize(mid, (w, h), interpolation=cv2.INTER_LANCZOS4)
+    lab = cv2.cvtColor(big, cv2.COLOR_BGR2LAB)
+    lab[..., 0] = cv2.createCLAHE(1.6, (6, 6)).apply(lab[..., 0])
+    big = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+    img = Image.fromarray(cv2.cvtColor(big, cv2.COLOR_BGR2RGB))
+    img = img.filter(ImageFilter.UnsharpMask(3, 140, 2)).filter(ImageFilter.UnsharpMask(1, 60, 1))
+    return img
+
 def main(src, out):
     bg = plaster().convert("RGBA")
-    photo = Image.open(src).convert("RGB").crop((100, 300, 474, 805))
-    aw, ah = 800, 1080
-    photo = photo.resize((aw, ah), Image.LANCZOS).filter(ImageFilter.UnsharpMask(2, 90, 2))
+    aw, ah = 760, 1120
+    photo = enhance(src, (100, 330, 474, 879), (aw, ah))
     photo = ImageEnhance.Color(photo).enhance(0.92)
     photo = ImageEnhance.Contrast(photo).enhance(1.05)
-    ax, ay = (W - aw) // 2, 545
+    ax, ay = (W - aw) // 2, 530
 
     mask = Image.new("L", (aw, ah), 0)                      # arch window
     m = ImageDraw.Draw(mask)
