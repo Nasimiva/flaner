@@ -11,7 +11,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 W, H = 1080, 1920
 SERIF = "/usr/share/fonts/truetype/freefont/FreeSerif.ttf"
 SERIF_IT = "/usr/share/fonts/truetype/freefont/FreeSerifItalic.ttf"
-GOLD_TOP, GOLD_BOT = (247, 226, 170), (184, 140, 72)
+GOLD_TOP, GOLD_BOT = (236, 224, 200), (205, 186, 154)   # muted champagne, not shiny gold
 CREAM = (245, 236, 218)
 
 def photo_layer(path, box):
@@ -26,11 +26,15 @@ def photo_layer(path, box):
     mid = cv2.bilateralFilter(cv2.resize(crop, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC), 5, 25, 5)
     big = cv2.resize(mid, (W, H), interpolation=cv2.INTER_LANCZOS4)
     lab = cv2.cvtColor(big, cv2.COLOR_BGR2LAB)
-    lab[..., 0] = cv2.createCLAHE(1.8, (6, 6)).apply(lab[..., 0])
+    lab[..., 0] = cv2.createCLAHE(1.2, (6, 6)).apply(lab[..., 0])
     big = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR).astype(np.float32)
-    big[..., 0] *= 0.90                                   # warm, cinematic grade
-    big[..., 2] *= 1.06
-    big = np.clip((big - 128) * 1.10 + 118, 0, 255)
+    hsv = cv2.cvtColor(big.astype("uint8"), cv2.COLOR_BGR2HSV).astype(np.float32)
+    hsv[..., 1] *= 0.62                                   # tone down the loud gold
+    hsv[..., 2] *= 0.88
+    big = cv2.cvtColor(np.clip(hsv, 0, 255).astype("uint8"), cv2.COLOR_HSV2BGR).astype(np.float32)
+    big[..., 0] *= 0.96                                   # gentle warm grade
+    big[..., 2] *= 1.02
+    big = np.clip((big - 128) * 1.04 + 112, 0, 255)
     img = Image.fromarray(cv2.cvtColor(big.astype("uint8"), cv2.COLOR_BGR2RGB))
     return img.filter(ImageFilter.UnsharpMask(3, 150, 2)).filter(ImageFilter.UnsharpMask(1, 60, 1))
 
@@ -68,7 +72,7 @@ def gold_text(size_img, xy, text, font, anchor="ma", track=0):
 
 def main(src, out):
     img = photo_layer(src, (133, 338, 589, 1150)).convert("RGBA")
-    img = Image.alpha_composite(img, gradient(0.95, 0.85, 860, 560))
+    img = Image.alpha_composite(img, gradient(0.97, 0.90, 900, 620, (26, 20, 16)))
     d = ImageDraw.Draw(img)
 
     def spaced(y, text, font, fill, track):
@@ -87,10 +91,9 @@ def main(src, out):
             x += w + track
 
     spaced(92, "FLANER COSMETICS", ImageFont.truetype(SERIF, 30), CREAM, 12)
-    gold_text(img, (W // 2, 150), "YSL", ImageFont.truetype(SERIF, 330))
-    spaced(505, "ЗОЛОТО  ·  КОЖА  ·  БЛЕСК", ImageFont.truetype(SERIF, 36), CREAM, 10)
-    d.text((W / 2, 1745), "Роскошь в каждой детали", font=ImageFont.truetype(SERIF_IT, 58), fill=CREAM, anchor="ma")
-    spaced(1835, "СМОТРЕТЬ ОБЗОР  →", ImageFont.truetype(SERIF, 30), GOLD_TOP, 9)
+    gold_text(img, (W // 2, 190), "YSL", ImageFont.truetype(SERIF, 230), track=40)
+    d.text((W / 2, 455), "Роскошь в деталях", font=ImageFont.truetype(SERIF_IT, 58), fill=CREAM, anchor="ma")
+    spaced(1810, "СМОТРЕТЬ ОБЗОР", ImageFont.truetype(SERIF, 28), CREAM, 12)
     img.convert("RGB").save(out, quality=95)
 
 if __name__ == "__main__":
