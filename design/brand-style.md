@@ -43,3 +43,15 @@ Warm colour grade, gentle contrast, no clutter, no app UI, no pure white. Gold p
 | Warm Taupe | `#8C7662` | Small spaced-out labels |
 
 Products sit directly on the background with feathered edges: no frames, no boxes. One large thin serif word, one italic line, one small CTA.
+
+## Bold variant: "Berry Rose" (Hourglass cover, bold version)
+
+| Name | Hex | Use |
+|---|---|---|
+| Deep Berry | `#5C2834` | Top of the gradient |
+| Rose Wine | `#964E52` | Middle of the gradient |
+| Dusty Rose | `#C48078` | Bottom of the gradient |
+| Ivory | `#F7ECDE` | Headline and CTA |
+| Blush | `#F0C8BE` | Italic line, small labels |
+
+Cut-out products with soft drop shadows, slightly rotated and cascading, under one large all-caps serif word.
