@@ -55,3 +55,14 @@ Products sit directly on the background with feathered edges: no frames, no boxe
 | Blush | `#F0C8BE` | Italic line, small labels |
 
 Cut-out products with soft drop shadows, slightly rotated and cascading, under one large all-caps serif word.
+
+## Dark editorial variant: "Cocoa Ivory" (Rituals cover)
+
+| Name | Hex | Use |
+|---|---|---|
+| Cocoa Black | `#221820` to `#3A2628` | Vertical gradient background |
+| Ivory | `#F5ECDE` | Headline, labels, CTA |
+| Blush | `#DEBEB2` | Italic line, small brand label |
+| Soft Brass | `#BEA076` | One thin rule above the CTA |
+
+Four photos in a 2×2 grid with thin gutters, each set named in small spaced capitals below its photo. The colour of the products (pink, red, teal, navy) is the accent, so the background stays neutral.
