@@ -66,3 +66,14 @@ Cut-out products with soft drop shadows, slightly rotated and cascading, under o
 | Soft Brass | `#BEA076` | One thin rule above the CTA |
 
 Four photos in a 2×2 grid with thin gutters, each set named in small spaced capitals below its photo. The colour of the products (pink, red, teal, navy) is the accent, so the background stays neutral.
+
+## Luxe variant: "Ivory Atelier" (Rituals cover, light version)
+
+| Name | Hex | Use |
+|---|---|---|
+| Ivory Atelier | `#F1E9DC` to `#E8DCCB` | Background gradient |
+| Ink Brown | `#3A2A22` | Headline (wide letter-spacing) and CTA |
+| Warm Taupe | `#8C7662` | Labels, italic line |
+| Brass | `#B09160` | Hairline rules only |
+
+Generous margins, square photo tiles with a soft shadow, headline tracked out wide, hairlines above the italic line and the CTA.
