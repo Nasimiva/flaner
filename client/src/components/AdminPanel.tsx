@@ -40,6 +40,7 @@ import {
 export const AdminPanel: React.FC = () => {
   const {
     orders,
+    refreshOrders,
     products,
     updateOrderStatus,
     addProduct,
@@ -58,6 +59,18 @@ export const AdminPanel: React.FC = () => {
   const [orderStatusFilter, setOrderStatusFilter] = useState<OrderStatus | 'all'>('all');
   const [orderSearchQuery, setOrderSearchQuery] = useState('');
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+
+  const changeOrderStatus = async (orderId: string, status: OrderStatus) => {
+    try {
+      await updateOrderStatus(orderId, status);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Не удалось обновить статус заказа.', 'error');
+    }
+  };
+
+  useEffect(() => {
+    refreshOrders().catch((error) => showToast(error instanceof Error ? error.message : 'Не удалось загрузить заказы.', 'error'));
+  }, []);
 
   // Telegram Bot integration state
   const [botStatus, setBotStatus] = useState<{
@@ -281,15 +294,16 @@ export const AdminPanel: React.FC = () => {
     setIsAddProductModalOpen(true);
   };
 
-  const handleSaveProduct = (e: React.FormEvent) => {
+  const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName.trim()) {
       showToast('Укажите название товара', 'error');
       return;
     }
 
-    if (editingProduct) {
-      updateProduct(editingProduct.id, {
+    try {
+      if (editingProduct) {
+        await updateProduct(editingProduct.id, {
         name: formName.trim(),
         brand: formBrand,
         category: formCategory,
@@ -301,9 +315,9 @@ export const AdminPanel: React.FC = () => {
         howToUse: formHowToUse,
         skinType: formSkinType,
         images: [formImageUrl]
-      });
-    } else {
-      addProduct({
+        });
+      } else {
+        await addProduct({
         name: formName.trim(),
         brand: formBrand,
         category: formCategory,
@@ -320,10 +334,28 @@ export const AdminPanel: React.FC = () => {
         inStock: true,
         stockCount: 15,
         isNew: true
-      });
+        });
+      }
+      setIsAddProductModalOpen(false);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Не удалось сохранить товар.', 'error');
     }
+  };
 
-    setIsAddProductModalOpen(false);
+  const handleDeleteProduct = async (id: string) => {
+    try {
+      await deleteProduct(id);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Не удалось удалить товар.', 'error');
+    }
+  };
+
+  const handleToggleProductStock = async (id: string) => {
+    try {
+      await toggleProductStock(id);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Не удалось обновить наличие.', 'error');
+    }
   };
 
   // Export orders JSON
@@ -604,7 +636,7 @@ export const AdminPanel: React.FC = () => {
                           {order.status === 'new' && (
                             <button
                               onClick={() => {
-                                updateOrderStatus(order.id, 'processing');
+                                void changeOrderStatus(order.id, 'processing');
                                 handleSimulateBotNotification(order, 'В сборке');
                               }}
                               className="px-2.5 py-1 bg-[#2A2421] text-white text-[11px] font-semibold rounded-lg hover:bg-[#3D3531]"
@@ -615,7 +647,7 @@ export const AdminPanel: React.FC = () => {
                           {order.status === 'processing' && (
                             <button
                               onClick={() => {
-                                updateOrderStatus(order.id, 'shipped');
+                                void changeOrderStatus(order.id, 'shipped');
                                 handleSimulateBotNotification(order, 'В пути к вам (передан курьеру)');
                               }}
                               className="px-2.5 py-1 bg-purple-700 text-white text-[11px] font-semibold rounded-lg hover:bg-purple-800"
@@ -626,7 +658,7 @@ export const AdminPanel: React.FC = () => {
                           {order.status === 'shipped' && (
                             <button
                               onClick={() => {
-                                updateOrderStatus(order.id, 'delivered');
+                                void changeOrderStatus(order.id, 'delivered');
                                 handleSimulateBotNotification(order, 'Доставлен! Спасибо за заказ');
                               }}
                               className="px-2.5 py-1 bg-emerald-700 text-white text-[11px] font-semibold rounded-lg hover:bg-emerald-800"
@@ -636,7 +668,7 @@ export const AdminPanel: React.FC = () => {
                           )}
                           {order.status !== 'cancelled' && order.status !== 'delivered' && (
                             <button
-                              onClick={() => updateOrderStatus(order.id, 'cancelled')}
+                              onClick={() => void changeOrderStatus(order.id, 'cancelled')}
                               className="px-2 py-1 bg-[#F5EFEB] text-[#A64B2A] hover:bg-[#EAE1D7] text-[11px] font-semibold rounded-lg"
                             >
                               Отменить
@@ -741,7 +773,7 @@ export const AdminPanel: React.FC = () => {
                     </span>
 
                     <button
-                      onClick={() => toggleProductStock(p.id)}
+                      onClick={() => handleToggleProductStock(p.id)}
                       className={`px-2 py-0.5 rounded-full font-semibold transition-colors ${
                         p.inStock
                           ? 'bg-emerald-100 text-emerald-800'
@@ -762,7 +794,7 @@ export const AdminPanel: React.FC = () => {
                       <span>Изменить</span>
                     </button>
                     <button
-                      onClick={() => deleteProduct(p.id)}
+                      onClick={() => handleDeleteProduct(p.id)}
                       className="w-8 h-8 rounded-lg bg-[#FAF0ED] hover:bg-[#F7E3DC] text-[#A64B2A] flex items-center justify-center"
                       title="Удалить товар"
                     >
@@ -908,7 +940,7 @@ export const AdminPanel: React.FC = () => {
                   className="bg-[#F5EFEB] text-[#A64B2A] hover:bg-[#EAE1D7] px-4 py-2 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition-colors"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Сбросить к демо-данным</span>
+                  <span>Обновить данные</span>
                 </button>
               </div>
             </div>

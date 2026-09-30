@@ -26,6 +26,7 @@ export const CheckoutModal: React.FC = () => {
     setIsCheckoutOpen,
     currency,
     createOrder,
+    showToast,
     telegramUser
   } = useShop();
 
@@ -128,10 +129,14 @@ export const CheckoutModal: React.FC = () => {
     setIsPaymentModalOpen(true);
   };
 
-  const handlePaymentSuccess = (completedOrder: Order) => {
-    createOrder(completedOrder);
-    setIsPaymentModalOpen(false);
-    setIsCheckoutOpen(false);
+  const handlePaymentSuccess = async (completedOrder: Order) => {
+    try {
+      await createOrder(completedOrder);
+      setIsPaymentModalOpen(false);
+      setIsCheckoutOpen(false);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Не удалось оформить заказ.', 'error');
+    }
   };
 
   return (

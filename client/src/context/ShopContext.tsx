@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Product, CartItem, Order, OrderStatus, CategoryId, Currency, TelegramWebAppUser } from '../types';
-import { INITIAL_PRODUCTS } from '../data/initialProducts';
 import { getTelegramUser, initTelegramApp, triggerHaptic } from '../utils/telegram';
 
 interface ShopContextType {
@@ -41,105 +40,23 @@ interface ShopContextType {
   updateQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
 
-  createOrder: (order: Order) => void;
-  updateOrderStatus: (orderId: string, status: OrderStatus) => void;
+  createOrder: (order: Order) => Promise<Order>;
+  updateOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>;
+  refreshOrders: () => Promise<void>;
 
-  addProduct: (product: Omit<Product, 'id'>) => void;
-  updateProduct: (id: string, product: Partial<Product>) => void;
-  deleteProduct: (id: string) => void;
-  toggleProductStock: (id: string) => void;
+  addProduct: (product: Omit<Product, 'id'>) => Promise<void>;
+  updateProduct: (id: string, product: Partial<Product>) => Promise<void>;
+  deleteProduct: (id: string) => Promise<void>;
+  toggleProductStock: (id: string) => Promise<void>;
   showToast: (message: string, type?: 'success' | 'info' | 'error') => void;
   resetDemoData: () => void;
 }
 
 const ShopContext = createContext<ShopContextType | undefined>(undefined);
 
-const SEED_ORDERS: Order[] = [
-  {
-    id: 'ord-101',
-    orderNumber: 'FL-4819',
-    createdAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(), // 45 min ago
-    customer: {
-      fullName: 'Дильноза Каримова',
-      phone: '+998 90 123 45 67',
-      telegramUsername: '@dilnoza_beauty',
-      address: 'Узбекистан, г. Ташкент',
-      city: 'Ташкент',
-      deliveryType: 'courier',
-      comment: 'Домофон работает, позвоните за 15 минут'
-    },
-    items: [
-      {
-        productId: 'prod-1',
-        productName: 'Advanced Night Repair Serum',
-        brand: 'Estée Lauder',
-        image: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=800&q=80',
-        price: 980000,
-        volume: '50 мл',
-        quantity: 1
-      },
-      {
-        productId: 'prod-5',
-        productName: 'Dior Addict Lip Glow Balm',
-        brand: 'Dior',
-        image: 'https://images.unsplash.com/photo-1586495777744-4413f21062fa?auto=format&fit=crop&w=800&q=80',
-        price: 520000,
-        volume: '3.2 г',
-        quantity: 1
-      }
-    ],
-    subtotal: 1500000,
-    discount: 150000,
-    deliveryFee: 0,
-    total: 1350000,
-    paymentMethod: 'card_online',
-    paymentStatus: 'paid',
-    status: 'processing',
-    promoCode: 'BEAUTY10'
-  },
-  {
-    id: 'ord-102',
-    orderNumber: 'FL-3912',
-    createdAt: new Date(Date.now() - 1000 * 60 * 180).toISOString(), // 3 hours ago
-    customer: {
-      fullName: 'Малика Усманова',
-      phone: '+998 93 987 65 43',
-      telegramUsername: '@malika_u',
-      address: 'Узбекистан, г. Ташкент',
-      city: 'Ташкент',
-      deliveryType: 'express'
-    },
-    items: [
-      {
-        productId: 'prod-9',
-        productName: 'Lost Cherry Eau de Parfum',
-        brand: 'Tom Ford',
-        image: 'https://images.unsplash.com/photo-1594035910387-fea47794261f?auto=format&fit=crop&w=800&q=80',
-        price: 3450000,
-        volume: '50 мл',
-        quantity: 1
-      }
-    ],
-    subtotal: 3450000,
-    discount: 0,
-    deliveryFee: 30000,
-    total: 3480000,
-    paymentMethod: 'click',
-    paymentStatus: 'paid',
-    status: 'shipped'
-  }
-];
-
 export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Local storage initialization
-  const [products, setProducts] = useState<Product[]>(() => {
-    try {
-      const saved = localStorage.getItem('flaner_products') || localStorage.getItem('lumiere_products');
-      return saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
-    } catch {
-      return INITIAL_PRODUCTS;
-    }
-  });
+  const [products, setProducts] = useState<Product[]>([]);
 
   const [cart, setCart] = useState<CartItem[]>(() => {
     try {
@@ -150,14 +67,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   });
 
-  const [orders, setOrders] = useState<Order[]>(() => {
-    try {
-      const saved = localStorage.getItem('flaner_orders') || localStorage.getItem('lumiere_orders');
-      return saved ? JSON.parse(saved) : SEED_ORDERS;
-    } catch {
-      return SEED_ORDERS;
-    }
-  });
+  const [orders, setOrders] = useState<Order[]>([]);
 
   const [selectedCategory, setSelectedCategory] = useState<CategoryId | 'all'>('all');
   const [selectedBrand, setSelectedBrand] = useState<string | 'all'>('all');
@@ -184,14 +94,20 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  // Sync to local storage
+  // The catalog is always loaded from the shared server database.
   useEffect(() => {
-    try {
-      localStorage.setItem('flaner_products', JSON.stringify(products));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [products]);
+    fetch('/api/products')
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Не удалось загрузить каталог с сервера.');
+        const data: unknown = await response.json();
+        if (!Array.isArray(data)) throw new Error('Сервер вернул некорректный каталог товаров.');
+        setProducts(data as Product[]);
+      })
+      .catch((error: unknown) => {
+        console.error('Could not load product catalog:', error);
+        showToast(error instanceof Error ? error.message : 'Не удалось загрузить каталог.', 'error');
+      });
+  }, []);
 
   useEffect(() => {
     try {
@@ -201,13 +117,12 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [cart]);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('flaner_orders', JSON.stringify(orders));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [orders]);
+  const refreshOrders = async () => {
+    const response = await fetch('/api/orders');
+    const result = await response.json().catch(() => []);
+    if (!response.ok || !Array.isArray(result)) throw new Error('Failed to load orders from the server.');
+    setOrders(result as Order[]);
+  };
 
   const showToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
     setToast({ message, type });
@@ -263,9 +178,17 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCart([]);
   };
 
-  const createOrder = (order: Order) => {
+  const createOrder = async (order: Order): Promise<Order> => {
+    const response = await fetch('/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(order)
+    });
+    const saved = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(saved.error || 'Could not save order.');
+    const persistedOrder = saved as Order;
     triggerHaptic('success');
-    setOrders((prev) => [order, ...prev]);
+    setOrders((prev) => [persistedOrder, ...prev.filter((existing) => existing.id !== persistedOrder.id)]);
     clearCart();
     showToast(`Заказ ${order.orderNumber} успешно оформлен!`, 'success');
 
@@ -275,8 +198,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          order,
-          customerChatId: order.customer.telegramId || telegramUser?.id
+          order: persistedOrder,
+          customerChatId: persistedOrder.customer.telegramId || telegramUser?.id
         })
       })
         .then((res) => res.json())
@@ -291,15 +214,18 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (e) {
       console.warn('Telegram dispatch error:', e);
     }
+    return persistedOrder;
   };
 
-  const updateOrderStatus = (orderId: string, status: OrderStatus) => {
+  const updateOrderStatus = async (orderId: string, status: OrderStatus) => {
     triggerHaptic('medium');
     const targetOrder = orders.find((ord) => ord.id === orderId);
-
-    setOrders((prev) =>
-      prev.map((ord) => (ord.id === orderId ? { ...ord, status } : ord))
-    );
+    const response = await fetch(`/api/orders/${encodeURIComponent(orderId)}/status`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status })
+    });
+    const updated = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(updated.error || 'Could not update order status.');
+    setOrders((prev) => prev.map((ord) => ord.id === orderId ? updated as Order : ord));
     showToast(`Статус заказа обновлен: ${status}`);
 
     if (targetOrder) {
@@ -321,39 +247,62 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const addProduct = (productData: Omit<Product, 'id'>) => {
-    const newProduct: Product = {
-      ...productData,
-      id: `prod-${Date.now()}`
-    };
-    setProducts((prev) => [newProduct, ...prev]);
+  const addProduct = async (productData: Omit<Product, 'id'>) => {
+    const response = await fetch('/api/products', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(productData)
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'Не удалось сохранить товар.');
+    setProducts((prev) => [result as Product, ...prev]);
     showToast('Товар добавлен в каталог!');
   };
 
-  const updateProduct = (id: string, updatedFields: Partial<Product>) => {
-    setProducts((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, ...updatedFields } : p))
-    );
+  const updateProduct = async (id: string, updatedFields: Partial<Product>) => {
+    const existing = products.find((product) => product.id === id);
+    if (!existing) throw new Error('Товар не найден в каталоге.');
+    const response = await fetch(`/api/products/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...existing, ...updatedFields })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'Не удалось сохранить товар.');
+    setProducts((prev) => prev.map((product) => product.id === id ? result as Product : product));
     showToast('Товар успешно обновлен');
   };
 
-  const deleteProduct = (id: string) => {
+  const deleteProduct = async (id: string) => {
     triggerHaptic('warning');
+    const response = await fetch(`/api/products/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (!response.ok) {
+      const result = await response.json().catch(() => ({}));
+      throw new Error(result.error || 'Не удалось удалить товар.');
+    }
     setProducts((prev) => prev.filter((p) => p.id !== id));
     showToast('Товар удален из каталога', 'info');
   };
 
-  const toggleProductStock = (id: string) => {
-    setProducts((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, inStock: !p.inStock } : p))
-    );
+  const toggleProductStock = async (id: string) => {
+    const product = products.find((item) => item.id === id);
+    if (!product) throw new Error('Товар не найден в каталоге.');
+    const response = await fetch(`/api/products/${encodeURIComponent(id)}/stock`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ inStock: !product.inStock })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'Не удалось обновить наличие.');
+    setProducts((prev) => prev.map((item) => item.id === id ? result as Product : item));
   };
 
   const resetDemoData = () => {
-    setProducts(INITIAL_PRODUCTS);
-    setOrders(SEED_ORDERS);
     setCart([]);
-    showToast('Данные сброшены к демонстрационному набору');
+    refreshOrders().then(
+      () => showToast('Список заказов обновлён из базы данных.', 'info'),
+      () => showToast('Не удалось обновить список заказов.', 'error')
+    );
   };
 
   return (
@@ -393,6 +342,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         clearCart,
         createOrder,
         updateOrderStatus,
+        refreshOrders,
         addProduct,
         updateProduct,
         deleteProduct,

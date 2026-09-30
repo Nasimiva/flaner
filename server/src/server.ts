@@ -3,6 +3,7 @@ import path from 'path';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { createProductRoutes } from './productRoutes.js';
+import { pool } from './db/pool.js';
 
 dotenv.config();
 
@@ -10,6 +11,8 @@ const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 
 app.disable('x-powered-by');
+// Render terminates TLS at its proxy. Trust its forwarded client IP for rate limits.
+if (process.env.NODE_ENV === 'production') app.set('trust proxy', 1);
 app.use(express.json({ limit: '100kb' }));
 
 // CORS: allow requests from the Vite dev server in development
@@ -18,7 +21,10 @@ app.use((req, res, next) => {
   const allowedOrigins = new Set(
     (process.env.CORS_ORIGINS || '').split(',').map((value) => value.trim()).filter(Boolean)
   );
-  const originAllowed = process.env.NODE_ENV !== 'production' || (origin && allowedOrigins.has(origin));
+  const devOrigin = origin === 'http://localhost:5173' || origin === 'http://127.0.0.1:5173';
+  const originAllowed = process.env.NODE_ENV === 'production'
+    ? Boolean(origin && allowedOrigins.has(origin))
+    : !origin || devOrigin || allowedOrigins.has(origin);
   if (origin && originAllowed) {
     res.vary('Origin');
     res.header('Access-Control-Allow-Origin', origin);
@@ -126,10 +132,118 @@ async function sendTelegramMessage(chatId: string | number, text: string, parseM
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', name: 'flaner_cosmetics' });
+  // Keep health useful for Render while confirming that the app can reach its database.
+  import('./db/pool.js').then(({ pool }) => pool.query('SELECT 1')).then(
+    () => res.json({ status: 'ok', database: 'connected', name: 'flaner_cosmetics' }),
+    (error: unknown) => {
+      console.error('Health check database query failed:', error);
+      res.status(503).json({ status: 'error', database: 'unavailable', name: 'flaner_cosmetics' });
+    }
+  );
 });
 
 app.use('/api/products', createProductRoutes(requireAdmin));
+
+// Orders are persisted in PostgreSQL. The browser may submit customer details and
+// item IDs, but prices, totals, delivery fees, and payment state are server-owned.
+app.post('/api/orders', async (req, res) => {
+  const submitted = req.body;
+  const items = submitted?.items;
+  const customer = submitted?.customer;
+  const paymentMethods = new Set(['card_online', 'telegram_payments', 'payme', 'click', 'stripe', 'cash_on_delivery']);
+  if (!customer || typeof customer.fullName !== 'string' || !customer.fullName.trim() ||
+      typeof customer.phone !== 'string' || !customer.phone.trim() || !Array.isArray(items) || !items.length ||
+      !items.every((item: any) => typeof item?.productId === 'string' && Number.isInteger(item.quantity) && item.quantity > 0) ||
+      new Set(items.map((item: any) => item.productId)).size !== items.length ||
+      !paymentMethods.has(submitted.paymentMethod) || !['courier', 'express', 'pickup'].includes(customer.deliveryType)) {
+    return res.status(400).json({ error: 'Invalid order details' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const ids = [...new Set(items.map((item: { productId: string }) => item.productId))];
+    const found = await client.query(
+      'SELECT id, name, brand, price, volume, images, in_stock, stock_count FROM products WHERE id = ANY($1::text[]) FOR UPDATE',
+      [ids]
+    );
+    const products = new Map(found.rows.map((product) => [product.id, product]));
+    if (products.size !== ids.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'One or more products are unavailable' });
+    }
+    const orderItems = items.map((item: { productId: string; quantity: number }) => {
+      const product = products.get(item.productId)!;
+      if (!product.in_stock || product.stock_count < item.quantity) throw new Error('INSUFFICIENT_STOCK');
+      return {
+        productId: product.id, productName: product.name, brand: product.brand,
+        image: Array.isArray(product.images) ? product.images[0] || '' : '',
+        price: Number(product.price), volume: product.volume, quantity: item.quantity
+      };
+    });
+    for (const item of items as Array<{ productId: string; quantity: number }>) {
+      await client.query(
+        'UPDATE products SET stock_count=stock_count-$2, in_stock=(stock_count-$2)>0, updated_at=NOW() WHERE id=$1',
+        [item.productId, item.quantity]
+      );
+    }
+    const subtotal = orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const deliveryFee = customer.deliveryType === 'pickup' ? 0 : customer.deliveryType === 'express' ? 45000 : subtotal >= 2000000 ? 0 : 30000;
+    const now = new Date().toISOString();
+    const id = `ord-${crypto.randomUUID()}`;
+    const orderNumber = `FL-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+    const order = {
+      id, orderNumber, createdAt: now,
+      customer: {
+        fullName: customer.fullName.trim(), phone: customer.phone.trim(),
+        telegramUsername: typeof customer.telegramUsername === 'string' ? customer.telegramUsername : undefined,
+        telegramId: typeof customer.telegramId === 'string' || typeof customer.telegramId === 'number' ? customer.telegramId : undefined,
+        address: typeof customer.address === 'string' ? customer.address : '',
+        city: typeof customer.city === 'string' ? customer.city : '',
+        comment: typeof customer.comment === 'string' ? customer.comment : undefined,
+        deliveryType: customer.deliveryType
+      },
+      items: orderItems, subtotal, discount: 0, deliveryFee, total: subtotal + deliveryFee,
+      paymentMethod: submitted.paymentMethod, paymentStatus: 'pending', status: 'new'
+    };
+    await client.query('INSERT INTO orders (id, order_number, payload) VALUES ($1, $2, $3::jsonb)', [id, orderNumber, JSON.stringify(order)]);
+    await client.query('COMMIT');
+    res.status(201).json(order);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    if (error instanceof Error && error.message === 'INSUFFICIENT_STOCK') return res.status(409).json({ error: 'A product is out of stock or has insufficient quantity' });
+    console.error('Could not create order:', error);
+    res.status(503).json({ error: 'Could not save order' });
+  } finally {
+    client.release();
+  }
+});
+
+app.get('/api/orders', requireAdmin, async (_req, res) => {
+  try {
+    const result = await pool.query('SELECT payload FROM orders ORDER BY created_at DESC');
+    res.json(result.rows.map((row) => row.payload));
+  } catch (error) {
+    console.error('Could not load orders:', error);
+    res.status(503).json({ error: 'Orders are temporarily unavailable' });
+  }
+});
+
+app.patch('/api/orders/:id/status', requireAdmin, async (req, res) => {
+  const allowed = new Set(['new', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']);
+  if (!allowed.has(req.body?.status)) return res.status(400).json({ error: 'Invalid order status' });
+  try {
+    const result = await pool.query(
+      `UPDATE orders SET payload = jsonb_set(payload, '{status}', to_jsonb($2::text)), updated_at=NOW() WHERE id=$1 RETURNING payload`,
+      [req.params.id, req.body.status]
+    );
+    if (!result.rowCount) return res.status(404).json({ error: 'Order not found' });
+    res.json(result.rows[0].payload);
+  } catch (error) {
+    console.error('Could not update order:', error);
+    res.status(503).json({ error: 'Could not update order status' });
+  }
+});
 
 app.get('/api/admin/session', (req, res) => {
   const session = verifySession(getCookie(req, SESSION_COOKIE));
@@ -148,14 +262,6 @@ const configured = Boolean(
   ADMIN_SESSION_SECRET &&
   ADMIN_EMAIL_ALLOWLIST.size
 );
-
-console.log('Login debug:', {
-  email,
-  codeLength: code.length,
-  configured,
-  emailAllowed: ADMIN_EMAIL_ALLOWLIST.has(email),
-  envCodeLength: ADMIN_ACCESS_CODE.length,
-});
 
 const matchesCode =
   configured &&
@@ -255,10 +361,14 @@ app.post('/api/telegram/admin-chat', requireAdmin, (req, res) => {
 // Send new order alert to Telegram
 app.post('/api/telegram/send-order', async (req, res) => {
   try {
-    const { order, customerChatId } = req.body;
-    if (!order || !order.orderNumber) {
+    const { customerChatId } = req.body;
+    const orderId = req.body?.order?.id;
+    if (typeof orderId !== 'string') {
       return res.status(400).json({ error: 'Order data is required' });
     }
+    const savedOrder = await pool.query('SELECT payload FROM orders WHERE id=$1', [orderId]);
+    if (!savedOrder.rowCount) return res.status(404).json({ error: 'Order not found' });
+    const order = savedOrder.rows[0].payload;
 
     const deliveryMap: Record<string, string> = {
       courier: 'Курьерская доставка (Узбекистан, г. Ташкент)',
@@ -440,6 +550,7 @@ if (process.env.NODE_ENV === 'production') {
 const clientDist = path.resolve(process.cwd(), '../client/dist');
   app.use(express.static(clientDist));
   app.get('*', (req, res) => {
+    if (req.path.startsWith('/api/')) return res.status(404).json({ error: 'API endpoint not found' });
     res.sendFile(path.join(clientDist, 'index.html'));
   });
 }
