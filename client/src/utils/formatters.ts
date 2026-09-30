@@ -26,11 +26,6 @@ export function formatPrice(amountInUzs: number, currency: Currency = 'UZS'): st
   return `${amountInUzs} сум`;
 }
 
-export function generateOrderNumber(): string {
-  const randomPart = Math.floor(1000 + Math.random() * 9000);
-  return `FL-${randomPart}`;
-}
-
 export function formatDate(isoString: string): string {
   try {
     const date = new Date(isoString);

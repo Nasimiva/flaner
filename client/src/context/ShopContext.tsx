@@ -40,7 +40,7 @@ interface ShopContextType {
   updateQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
 
-  createOrder: (order: Order) => Promise<Order>;
+  createOrder: (order: Omit<Order, 'orderNumber'>) => Promise<Order>;
   updateOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>;
   refreshOrders: () => Promise<void>;
 
@@ -178,7 +178,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCart([]);
   };
 
-  const createOrder = async (order: Order): Promise<Order> => {
+  const createOrder = async (order: Omit<Order, 'orderNumber'>): Promise<Order> => {
     const response = await fetch('/api/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -190,7 +190,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     triggerHaptic('success');
     setOrders((prev) => [persistedOrder, ...prev.filter((existing) => existing.id !== persistedOrder.id)]);
     clearCart();
-    showToast(`Заказ ${order.orderNumber} успешно оформлен!`, 'success');
+    showToast(`Заказ ${persistedOrder.orderNumber} успешно оформлен!`, 'success');
 
     // Notify Telegram bot
     try {
@@ -205,7 +205,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .then((res) => res.json())
         .then((data) => {
           if (data.recipientsSent && data.recipientsSent.length > 0) {
-            showToast(`Уведомление о заказе ${order.orderNumber} отправлено в Telegram (@flaneruz_bot)`, 'success');
+            showToast(`Уведомление о заказе ${persistedOrder.orderNumber} отправлено в Telegram (@flaneruz_bot)`, 'success');
           }
         })
         .catch((err) => {

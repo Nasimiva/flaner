@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useShop } from '../context/ShopContext';
 import { Order, PaymentMethod, OrderCustomer } from '../types';
-import { formatPrice, generateOrderNumber } from '../utils/formatters';
+import { formatPrice } from '../utils/formatters';
 import { triggerHaptic } from '../utils/telegram';
 import { PaymentModal } from './PaymentModal';
 import {
@@ -45,6 +45,7 @@ export const CheckoutModal: React.FC = () => {
   // Active payment gateway modal state
   const [pendingOrder, setPendingOrder] = useState<Order | null>(null);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Pre-fill with Telegram user data if available
   useEffect(() => {
@@ -82,8 +83,9 @@ export const CheckoutModal: React.FC = () => {
     return Object.keys(errors).length === 0;
   };
 
-  const handleStartPayment = (e: React.FormEvent) => {
+  const handleStartPayment = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!validateForm()) {
       triggerHaptic('error');
       return;
@@ -102,9 +104,8 @@ export const CheckoutModal: React.FC = () => {
       deliveryType
     };
 
-    const newOrder: Order = {
+    const newOrder: Omit<Order, 'orderNumber'> = {
       id: `ord-${Date.now()}`,
-      orderNumber: generateOrderNumber(),
       createdAt: new Date().toISOString(),
       customer: customerData,
       items: cart.map((item) => ({
@@ -125,18 +126,22 @@ export const CheckoutModal: React.FC = () => {
       status: 'new'
     };
 
-    setPendingOrder(newOrder);
-    setIsPaymentModalOpen(true);
-  };
-
-  const handlePaymentSuccess = async (completedOrder: Order) => {
+    // The server generates the order number; the payment screen shows the saved order.
+    setIsSubmitting(true);
     try {
-      await createOrder(completedOrder);
-      setIsPaymentModalOpen(false);
-      setIsCheckoutOpen(false);
+      const savedOrder = await createOrder(newOrder);
+      setPendingOrder(savedOrder);
+      setIsPaymentModalOpen(true);
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Не удалось оформить заказ.', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
+  };
+
+  const closePayment = () => {
+    setIsPaymentModalOpen(false);
+    setIsCheckoutOpen(false);
   };
 
   return (
@@ -589,8 +594,8 @@ export const CheckoutModal: React.FC = () => {
         <PaymentModal
           order={pendingOrder}
           isOpen={isPaymentModalOpen}
-          onClose={() => setIsPaymentModalOpen(false)}
-          onSuccess={handlePaymentSuccess}
+          onClose={closePayment}
+          onSuccess={closePayment}
           currency={currency}
         />
       )}
