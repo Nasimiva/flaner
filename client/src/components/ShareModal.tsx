@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useShop } from '../context/ShopContext';
-import { Share2, Copy, Check, QrCode, Smartphone, ExternalLink, X, Send, Download, Code2, FolderArchive } from 'lucide-react';
+import { Share2, Copy, Check, QrCode, Smartphone, ExternalLink, X, Send } from 'lucide-react';
 import { triggerHaptic } from '../utils/telegram';
 
 interface ShareModalProps {
@@ -176,43 +176,6 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose }) => {
             >
               <span>{copiedTg ? 'Скопировано' : 'Скопировать ссылку'}</span>
             </button>
-          </div>
-
-          {/* VS Code ZIP Download Section */}
-          <div className="p-4 bg-linear-to-br from-[#2A2421] to-[#3D3531] text-white rounded-2xl space-y-3 shadow-md">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <div className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center text-[#C9A227]">
-                  <Code2 className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold text-white">Исходный код для VS Code</h4>
-                  <p className="text-[10px] text-[#C4B7AB]">Готовый .ZIP архив проекта</p>
-                </div>
-              </div>
-              <span className="text-[9px] bg-[#C9A227]/20 text-[#E8DCBF] border border-[#C9A227]/40 px-2 py-0.5 rounded-full font-mono">
-                flaner-cosmetics.zip
-              </span>
-            </div>
-
-            <p className="text-[11px] text-[#D1C7BD] leading-relaxed">
-              Скачайте архив проекта для открытия в редакторе VS Code (включает клиент, сервер и все компоненты).
-            </p>
-
-            <a
-              href="/flaner-cosmetics.zip"
-              download="flaner-cosmetics.zip"
-              className="w-full bg-[#C9A227] hover:bg-[#D4B03B] text-[#2A2421] py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center space-x-2 transition-transform active:scale-98 shadow-sm"
-            >
-              <Download className="w-4 h-4" />
-              <span>Скачать ZIP-файл проекта</span>
-            </a>
-
-            <div className="bg-black/25 rounded-xl p-2.5 text-[10px] text-[#C4B7AB] space-y-1 font-mono">
-              <div className="text-white/80 font-bold">Команды для запуска в терминале VS Code:</div>
-              <div className="text-[#E8DCBF]">$ npm install</div>
-              <div className="text-[#E8DCBF]">$ npm run dev</div>
-            </div>
           </div>
         </div>
       </div>

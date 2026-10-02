@@ -1,11 +1,13 @@
 import React from 'react';
 import { useShop } from '../context/ShopContext';
-import { ShoppingBag, Sparkles, Smartphone, ShieldCheck, User, Truck, Share2, QrCode } from 'lucide-react';
+import { ShoppingBag, Sparkles, Smartphone, ShieldCheck, User, Share2, QrCode, Heart } from 'lucide-react';
 import { Currency } from '../types';
 
 export const Header: React.FC = () => {
   const {
     cart,
+    favorites,
+    setIsFavoritesOpen,
     setIsCartOpen,
     currency,
     setCurrency,
@@ -72,14 +74,6 @@ export const Header: React.FC = () => {
         </div>
       </div>
 
-      {/* Free Shipping Announcement Banner */}
-      <div className="bg-[#FAF5E8] border-b border-[#E8DCBF] px-3 py-1.5 text-center text-xs font-medium text-[#5C4515] flex items-center justify-center space-x-1.5">
-        <Truck className="w-3.5 h-3.5 text-[#C9A227] shrink-0" />
-        <span>
-          Бесплатная доставка по всему Узбекистану при покупке от <strong className="font-bold text-[#2A2421]">2 000 000 сум</strong>
-        </span>
-      </div>
-
       {/* Main navigation header */}
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
         <div className="flex items-center space-x-3">
@@ -143,6 +137,22 @@ export const Header: React.FC = () => {
             </div>
           )}
 
+          {/* Favorites button: a separate wish list, independent from the cart */}
+          <button
+            onClick={() => setIsFavoritesOpen(true)}
+            className="relative flex items-center space-x-1.5 bg-white/80 hover:bg-[#F3EBE3] text-[#5B4C43] border border-[#DFD6CD] px-3 py-2 rounded-full transition-all active:scale-95"
+            title="Избранное"
+            aria-label="Избранное"
+          >
+            <Heart className={`w-4 h-4 ${favorites.length > 0 ? 'text-[#A64B2A] fill-[#A64B2A]' : 'text-[#6E5C51]'}`} />
+            <span className="hidden sm:inline text-xs font-semibold tracking-wide">Избранное</span>
+            {favorites.length > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 bg-[#A64B2A] text-white text-[11px] font-bold w-5 h-5 rounded-full flex items-center justify-center shadow-md">
+                {favorites.length}
+              </span>
+            )}
+          </button>
+
           {/* Cart button */}
           <button
             onClick={() => setIsCartOpen(true)}
@@ -150,7 +160,7 @@ export const Header: React.FC = () => {
             title="Открыть корзину"
           >
             <ShoppingBag className="w-4 h-4 text-[#E8DDD4]" />
-            <span className="text-xs font-semibold tracking-wide">Корзина</span>
+            <span className="hidden sm:inline text-xs font-semibold tracking-wide">Корзина</span>
             {totalItems > 0 && (
               <span className="absolute -top-1.5 -right-1.5 bg-[#C9A227] text-white text-[11px] font-bold w-5 h-5 rounded-full flex items-center justify-center shadow-md animate-scale">
                 {totalItems}

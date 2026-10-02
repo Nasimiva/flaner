@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useShop } from '../context/ShopContext';
 import { formatPrice } from '../utils/formatters';
 import { triggerHaptic } from '../utils/telegram';
-import { X, Star, ShoppingBag, Plus, Minus, Check, Shield, Sparkles, Droplets, Info, Truck } from 'lucide-react';
+import { X, Star, ShoppingBag, Plus, Minus, Check, Shield, Sparkles, Droplets, Info, Truck, Heart } from 'lucide-react';
 
 export const ProductDetailModal: React.FC = () => {
   const {
@@ -10,7 +10,9 @@ export const ProductDetailModal: React.FC = () => {
     closeProductDetail,
     addToCart,
     cart,
-    currency
+    currency,
+    favoriteIds,
+    toggleFavorite
   } = useShop();
 
   const [activeImageIndex, setActiveImageIndex] = useState(0);
@@ -22,6 +24,7 @@ export const ProductDetailModal: React.FC = () => {
   const product = selectedProductForDetail;
   const inCartItem = cart.find((item) => item.product.id === product.id);
   const alreadyInCartCount = inCartItem ? inCartItem.quantity : 0;
+  const isFavorite = favoriteIds.includes(product.id);
 
   const handleAdd = () => {
     triggerHaptic('medium');
@@ -46,12 +49,24 @@ export const ProductDetailModal: React.FC = () => {
               {product.volume}
             </span>
           </div>
-          <button
-            onClick={closeProductDetail}
-            className="w-8 h-8 rounded-full bg-[#EFE9E2] hover:bg-[#E2D8CE] flex items-center justify-center text-[#4A3E37] transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => toggleFavorite(product.id)}
+              aria-label={isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'}
+              aria-pressed={isFavorite}
+              title={isFavorite ? 'Убрать из избранного' : 'В избранное'}
+              className="w-8 h-8 rounded-full bg-[#EFE9E2] hover:bg-[#E2D8CE] flex items-center justify-center transition-colors"
+            >
+              <Heart className={`w-4 h-4 ${isFavorite ? 'text-[#A64B2A] fill-[#A64B2A]' : 'text-[#4A3E37]'}`} />
+            </button>
+            <button
+              onClick={closeProductDetail}
+              aria-label="Закрыть"
+              className="w-8 h-8 rounded-full bg-[#EFE9E2] hover:bg-[#E2D8CE] flex items-center justify-center text-[#4A3E37] transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Scrollable content */}

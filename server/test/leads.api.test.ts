@@ -56,8 +56,18 @@ const withTimeout = <T>(work: Promise<T>, ms: number): Promise<T | 'timeout'> =>
 function killTree(pid: number | undefined): void {
   if (!pid) return;
   try {
-    if (process.platform === 'win32') spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
-    else process.kill(pid, 'SIGKILL');
+    if (process.platform === 'win32') {
+      spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
+      // PostgreSQL can fork an I/O worker while it is shutting down. Such a late child is missing from the
+      // tree that `taskkill /T` walked, and it survives its dead parent. Sweep anything still pointing at the pid.
+      for (let attempt = 0; attempt < 3; attempt++) {
+        spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command',
+          `Get-CimInstance Win32_Process -Filter "ParentProcessId=${pid}" | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`
+        ], { stdio: 'ignore' });
+      }
+    } else {
+      process.kill(pid, 'SIGKILL');
+    }
   } catch { /* already gone */ }
 }
 
@@ -91,7 +101,10 @@ async function startDatabase(): Promise<void> {
   const instance = new EmbeddedPostgres({ databaseDir: dataDir, user: 'qa', password: 'qa', port, persistent: false, onLog: () => undefined, onError: () => undefined });
 
   // Last line of defence: if the test process dies without running `after`, never leave postgres behind.
-  const killPostmaster = () => killTree(postmasterPid(dataDir));
+  // The pid is remembered right after start: once the postmaster is gone, postmaster.pid is gone too, and
+  // its orphaned worker processes could no longer be found.
+  let knownPid: number | undefined;
+  const killPostmaster = () => killTree(knownPid ?? postmasterPid(dataDir));
   process.once('exit', killPostmaster);
 
   stopDb = async () => {
@@ -104,6 +117,7 @@ async function startDatabase(): Promise<void> {
 
   await instance.initialise();
   await instance.start();
+  knownPid = postmasterPid(dataDir);
   // The cluster uses the OS default encoding (WIN1251 on some Windows locales), so the test database is
   // created explicitly as UTF8 from template0.
   const admin = new pg.Client({ connectionString: `postgresql://qa:qa@localhost:${port}/postgres` });

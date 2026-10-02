@@ -2,7 +2,7 @@ import React from 'react';
 import { Product } from '../types';
 import { useShop } from '../context/ShopContext';
 import { formatPrice } from '../utils/formatters';
-import { Star, Plus, Minus, ShoppingBag, Eye } from 'lucide-react';
+import { Star, Plus, Minus, ShoppingBag, Eye, Heart } from 'lucide-react';
 import { triggerHaptic } from '../utils/telegram';
 
 interface ProductCardProps {
@@ -10,7 +10,8 @@ interface ProductCardProps {
 }
 
 export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
-  const { cart, addToCart, updateQuantity, openProductDetail, currency } = useShop();
+  const { cart, addToCart, updateQuantity, openProductDetail, currency, favoriteIds, toggleFavorite } = useShop();
+  const isFavorite = favoriteIds.includes(product.id);
 
   const cartItem = cart.find((item) => item.product.id === product.id);
   const currentQuantity = cartItem ? cartItem.quantity : 0;
@@ -28,6 +29,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const handleDecrement = (e: React.MouseEvent) => {
     e.stopPropagation();
     updateQuantity(product.id, currentQuantity - 1);
+  };
+
+  const handleToggleFavorite = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    toggleFavorite(product.id);
   };
 
   const handleCardClick = () => {
@@ -67,6 +73,17 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             </span>
           )}
         </div>
+
+        {/* Favorite toggle (a separate wish list, not the cart) */}
+        <button
+          onClick={handleToggleFavorite}
+          aria-label={isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'}
+          aria-pressed={isFavorite}
+          title={isFavorite ? 'Убрать из избранного' : 'В избранное'}
+          className="absolute top-2.5 right-2.5 z-20 w-8 h-8 rounded-full bg-white/90 hover:bg-white backdrop-blur-xs shadow-sm flex items-center justify-center transition-all active:scale-90"
+        >
+          <Heart className={`w-4 h-4 transition-colors ${isFavorite ? 'text-[#A64B2A] fill-[#A64B2A]' : 'text-[#6E5C51]'}`} />
+        </button>
 
         {/* Volume badge */}
         <div className="absolute bottom-2.5 right-2.5 bg-black/60 backdrop-blur-xs text-white text-[10px] font-medium px-2 py-0.5 rounded-full">

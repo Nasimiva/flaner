@@ -1058,15 +1058,6 @@ export const AdminPanel: React.FC = () => {
                     <Send className="w-3.5 h-3.5" />
                     <span>Отправить в чат</span>
                   </a>
-                  <a
-                    href="/flaner-cosmetics.zip"
-                    download="flaner-cosmetics.zip"
-                    className="bg-[#5C4515] hover:bg-[#46340F] text-white px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center justify-center space-x-1.5 transition-colors shrink-0"
-                    title="Скачать ZIP архив для VS Code"
-                  >
-                    <Download className="w-3.5 h-3.5 text-[#E8DCBF]" />
-                    <span>Скачать .ZIP для VS Code</span>
-                  </a>
                 </div>
               </div>
 

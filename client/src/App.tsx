@@ -5,7 +5,8 @@ import { CategoryNav } from './components/CategoryNav';
 import { ProductCard } from './components/ProductCard';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { CartDrawer } from './components/CartDrawer';
-import { CheckoutModal } from './components/CheckoutModal';
+import { LeadModal } from './components/LeadModal';
+import { FavoritesDrawer } from './components/FavoritesDrawer';
 import { AdminAccess } from './components/AdminAccess';
 import { TelegramFrame } from './components/TelegramFrame';
 import { ShareModal } from './components/ShareModal';
@@ -16,7 +17,7 @@ import {
   ArrowRight,
   ShieldCheck,
   Truck,
-  CreditCard,
+  PhoneCall,
   Heart,
   CheckCircle,
   AlertCircle,
@@ -106,7 +107,7 @@ const ShopContent: React.FC = () => {
                 </h1>
 
                 <p className="text-xs sm:text-sm text-[#D3C7BD] leading-relaxed">
-                  Оригинальная продукция ведущих мировых домов красоты с моментальной оплатой через Telegram Payments, Payme, Click и Stripe.
+                  Оригинальная продукция ведущих мировых домов красоты. Выберите товары и оставьте заявку — наш сотрудник позвонит вам и подтвердит заказ.
                 </p>
 
                 {/* Highlights bar */}
@@ -120,8 +121,8 @@ const ShopContent: React.FC = () => {
                     <span>Бесплатная доставка от 2 000 000 сум</span>
                   </span>
                   <span className="flex items-center space-x-1 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full">
-                    <CreditCard className="w-3 h-3 text-[#C9A227]" />
-                    <span>Payme / Click / Telegram</span>
+                    <PhoneCall className="w-3 h-3 text-[#C9A227]" />
+                    <span>Заявка без онлайн-оплаты</span>
                   </span>
                 </div>
               </div>
@@ -188,21 +189,9 @@ const ShopContent: React.FC = () => {
                 </span>
               </div>
 
-              {/* Supported Payment Badges */}
-              <div className="flex flex-wrap items-center justify-center gap-1.5">
-                <span className="px-2.5 py-1 rounded-md bg-[#2B5278]/10 text-[#2B5278] font-bold text-[10px]">
-                  Telegram Payments
-                </span>
-                <span className="px-2.5 py-1 rounded-md bg-[#19C5B2]/10 text-[#0E7A6E] font-bold text-[10px]">
-                  Payme
-                </span>
-                <span className="px-2.5 py-1 rounded-md bg-[#0089D0]/10 text-[#006BB3] font-bold text-[10px]">
-                  Click
-                </span>
-                <span className="px-2.5 py-1 rounded-md bg-[#635BFF]/10 text-[#4B45C6] font-bold text-[10px]">
-                  Stripe
-                </span>
-              </div>
+              <span className="px-3 py-1.5 rounded-md bg-[#FAF5E8] text-[#5C4515] font-semibold text-[11px] border border-[#E8DCBF]">
+                Оформление по заявке — оплата не требуется
+              </span>
             </div>
 
             <div className="pt-4 border-t border-[#F2ECE5] flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-[#A89A90]">
@@ -241,7 +230,8 @@ const ShopContent: React.FC = () => {
         {/* Modals */}
         <ProductDetailModal />
         <CartDrawer />
-        <CheckoutModal />
+        <LeadModal />
+        <FavoritesDrawer />
         <ShareModal isOpen={isShareOpen} onClose={() => setIsShareOpen(false)} />
 
         {/* Global Toast Notification */}
