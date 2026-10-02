@@ -1,0 +1,9 @@
+{
+  "name": "flaner-server-test-tools",
+  "private": true,
+  "type": "module",
+  "description": "Test-only dependencies. Not installed by the production build (npm ci in ../ ignores this folder).",
+  "devDependencies": {
+    "embedded-postgres": "^18.4.0-beta.17"
+  }
+}

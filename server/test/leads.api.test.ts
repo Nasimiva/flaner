@@ -4,8 +4,9 @@
 //
 //   npm test
 //
-// Database: by default a throwaway PostgreSQL is started from the `embedded-postgres` devDependency, so
-// `npm install && npm test` works on a clean checkout with nothing else installed. To use your own server
+// Database: by default a throwaway PostgreSQL is started from `embedded-postgres`, a test-only dependency that lives in
+// test/package.json (so the production build never installs it). `npm test` installs it first (pretest), so
+// `npm ci && npm test` works on a clean checkout. To use your own server
 // instead (for example a CI service container) set TEST_DATABASE_URL to an EMPTY scratch database:
 // its public schema is wiped.
 import assert from 'node:assert/strict';
@@ -94,7 +95,7 @@ async function startDatabase(): Promise<void> {
   try {
     EmbeddedPostgres = (await import('embedded-postgres')).default;
   } catch (error) {
-    throw new Error(`Cannot start the test database: run "npm install" (embedded-postgres is a devDependency) or set TEST_DATABASE_URL. ${(error as Error).message}`);
+    throw new Error(`Cannot start the test database: run "npm test" (its pretest step installs test/node_modules) or set TEST_DATABASE_URL. ${(error as Error).message}`);
   }
   const port = await freePort();
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'flaner-leads-pg-'));
