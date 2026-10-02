@@ -14,7 +14,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     volume: '50 мл',
     images: [
       'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1608248597359-247f078a6ff6?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?auto=format&fit=crop&w=800&q=80',
       'https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?auto=format&fit=crop&w=800&q=80'
     ],
     description: 'Легендарная ночная восстанавливающая сыворотка нового поколения с технологией Chronolux Power Signal. Глубоко увлажняет на 72 часа, разглаживает мимические морщинки и придает сияние коже уже после первого применения.',
@@ -36,7 +36,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     reviewsCount: 310,
     volume: '30 мл',
     images: [
-      'https://images.unsplash.com/photo-1608248597359-247f078a6ff6?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1617897903246-719242758050?auto=format&fit=crop&w=800&q=80',
       'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=800&q=80'
     ],
     description: 'Концентрированная сыворотка на водной основе с тремя формами гиалуроновой кислоты разной молекулярной массы и витамином B5. Обеспечивает многоуровневое увлажнение и укрепляет защитный барьер.',

@@ -75,14 +75,14 @@ export const Header: React.FC = () => {
       </div>
 
       {/* Main navigation header */}
-      <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center space-x-3">
+      <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-2">
+        <div className="flex items-center min-w-0">
           <button
             onClick={() => setIsAdminOpen(false)}
             className="text-left group focus:outline-none"
           >
             <div className="flex items-center space-x-1.5">
-              <span className="font-serif text-2xl font-bold tracking-widest text-[#2A2421] group-hover:text-[#6E4F3E] transition-colors">
+              <span className="font-serif text-xl sm:text-2xl font-bold tracking-widest text-[#2A2421] group-hover:text-[#6E4F3E] transition-colors">
                 FLANER
               </span>
               <Sparkles className="w-4 h-4 text-[#C9A227] fill-[#C9A227]/30" />
@@ -94,12 +94,13 @@ export const Header: React.FC = () => {
         </div>
 
         {/* Right side controls */}
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {/* Share / Open on Phone Button */}
           <button
             onClick={() => setIsShareOpen(true)}
-            className="flex items-center space-x-1 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-medium border bg-[#FAF5E8] hover:bg-[#F3EBDA] text-[#5C4515] border-[#E8DCBF] transition-all shadow-2xs"
+            className="flex items-center justify-center gap-1 w-10 h-10 sm:w-auto sm:h-auto sm:px-3 sm:py-1.5 rounded-full text-xs font-medium border bg-[#FAF5E8] hover:bg-[#F3EBDA] text-[#5C4515] border-[#E8DCBF] transition-all shadow-2xs"
             title="Открыть на телефоне или поделиться ссылкой"
+            aria-label="Открыть на телефоне"
           >
             <Smartphone className="w-3.5 h-3.5 text-[#C9A227]" />
             <span className="hidden sm:inline font-semibold">На телефон</span>
@@ -109,19 +110,17 @@ export const Header: React.FC = () => {
           {/* Admin panel toggle button */}
           <button
             onClick={() => setIsAdminOpen(!isAdminOpen)}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+            className={`flex items-center justify-center gap-1.5 w-10 h-10 sm:w-auto sm:h-auto sm:px-3 sm:py-1.5 rounded-full text-xs font-medium border transition-all ${
               isAdminOpen
                 ? 'bg-[#2A2421] text-white border-[#2A2421] shadow-sm'
                 : 'bg-white/80 text-[#5B4C43] border-[#DFD5CC] hover:bg-[#F3EBE3]'
             }`}
             title="Панель администратора (товары и заказы)"
+            aria-label={isAdminOpen ? 'В магазин' : 'Админ-панель'}
           >
             <ShieldCheck className="w-3.5 h-3.5 text-[#C9A227]" />
             <span className="hidden sm:inline">
               {isAdminOpen ? 'В магазин' : 'Админ-панель'}
-            </span>
-            <span className="sm:hidden">
-              {isAdminOpen ? 'Магазин' : 'Админ'}
             </span>
           </button>
 
@@ -140,7 +139,7 @@ export const Header: React.FC = () => {
           {/* Favorites button: a separate wish list, independent from the cart */}
           <button
             onClick={() => setIsFavoritesOpen(true)}
-            className="relative flex items-center space-x-1.5 bg-white/80 hover:bg-[#F3EBE3] text-[#5B4C43] border border-[#DFD6CD] px-3 py-2 rounded-full transition-all active:scale-95"
+            className="relative flex items-center justify-center gap-1.5 bg-white/80 hover:bg-[#F3EBE3] text-[#5B4C43] border border-[#DFD6CD] w-10 h-10 sm:w-auto sm:h-auto sm:px-3 sm:py-2 rounded-full transition-all active:scale-95"
             title="Избранное"
             aria-label="Избранное"
           >
@@ -156,8 +155,9 @@ export const Header: React.FC = () => {
           {/* Cart button */}
           <button
             onClick={() => setIsCartOpen(true)}
-            className="relative flex items-center space-x-2 bg-[#2A2421] hover:bg-[#3D3531] text-white px-3.5 py-2 rounded-full shadow-sm hover:shadow transition-all active:scale-95"
+            className="relative flex items-center justify-center gap-2 bg-[#2A2421] hover:bg-[#3D3531] text-white w-10 h-10 sm:w-auto sm:h-auto sm:px-3.5 sm:py-2 rounded-full shadow-sm hover:shadow transition-all active:scale-95"
             title="Открыть корзину"
+            aria-label="Открыть корзину"
           >
             <ShoppingBag className="w-4 h-4 text-[#E8DDD4]" />
             <span className="hidden sm:inline text-xs font-semibold tracking-wide">Корзина</span>
