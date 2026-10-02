@@ -4,6 +4,10 @@ import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { createProductRoutes } from './productRoutes.js';
 import { pool } from './db/pool.js';
+import { errorMiddleware } from './http/errors.js';
+import { logger } from './logger.js';
+import { createLeadRouters } from './modules/leads/leadRoutes.js';
+import { formatLeadMessage } from './modules/leads/leadNotification.js';
 
 dotenv.config();
 
@@ -143,6 +147,38 @@ app.get('/api/health', (req, res) => {
 });
 
 app.use('/api/products', createProductRoutes(requireAdmin));
+
+// Leads (call-back requests). The shopper endpoint is public and rate limited; the rest need an admin session.
+function positiveInt(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+const leadRouters = createLeadRouters({
+  pool,
+  botToken: TELEGRAM_BOT_TOKEN,
+  initDataMaxAgeSeconds: positiveInt(process.env.TELEGRAM_INIT_DATA_MAX_AGE_SECONDS, 24 * 60 * 60),
+  rateLimit: {
+    windowMs: positiveInt(process.env.LEADS_RATE_LIMIT_WINDOW_MINUTES, 15) * 60 * 1000,
+    max: positiveInt(process.env.LEADS_RATE_LIMIT_MAX, 10)
+  },
+  notifyLeadCreated: async (lead) => {
+    const snippet = `Заявка ${lead.leadNumber} (${lead.itemsTotal} UZS)`;
+    if (!TELEGRAM_BOT_TOKEN || !configuredAdminChatId) {
+      logger.warn('Lead notification skipped: Telegram bot token or admin chat id is not configured', { leadNumber: lead.leadNumber });
+      return;
+    }
+    try {
+      await sendTelegramMessage(configuredAdminChatId, formatLeadMessage(lead));
+      telegramLogs.unshift({ id: `log-${Date.now()}`, timestamp: new Date().toISOString(), type: 'order', recipient: configuredAdminChatId, status: 'sent', textSnippet: snippet });
+    } catch (error) {
+      telegramLogs.unshift({ id: `log-${Date.now()}`, timestamp: new Date().toISOString(), type: 'order', recipient: configuredAdminChatId, status: 'failed', error: error instanceof Error ? error.message : 'unknown error', textSnippet: snippet });
+      throw error;
+    }
+  }
+});
+app.use('/api/leads', leadRouters.publicRouter);
+app.use('/api/admin/leads', requireAdmin, leadRouters.adminRouter);
 
 // Orders are persisted in PostgreSQL. The browser may submit customer details and
 // item IDs, but prices, totals, delivery fees, and payment state are server-owned.
@@ -554,6 +590,9 @@ const clientDist = path.resolve(process.cwd(), '../client/dist');
     res.sendFile(path.join(clientDist, 'index.html'));
   });
 }
+
+// Must stay after every route: turns validation, HttpError and JSON-parse failures into JSON responses.
+app.use(errorMiddleware);
 
 // ======================== START ========================
 
