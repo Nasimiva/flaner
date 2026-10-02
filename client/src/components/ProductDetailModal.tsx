@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useShop } from '../context/ShopContext';
 import { formatPrice } from '../utils/formatters';
 import { triggerHaptic } from '../utils/telegram';
-import { X, Star, ShoppingBag, Plus, Minus, Check, Shield, Sparkles, Droplets, Info, Truck, Heart } from 'lucide-react';
+import { X, Star, ShoppingBag, Plus, Minus, Check, Shield, Sparkles, Droplets, Info, Heart } from 'lucide-react';
 
 export const ProductDetailModal: React.FC = () => {
   const {
@@ -161,12 +161,6 @@ export const ProductDetailModal: React.FC = () => {
                 <span>{product.skinType}</span>
               </div>
             )}
-
-            {/* Free shipping perk badge */}
-            <div className="mt-2 text-xs text-[#5C4515] bg-[#FAF5E8] border border-[#E8DCBF] px-3 py-1.5 rounded-xl inline-flex items-center space-x-1.5">
-              <Truck className="w-3.5 h-3.5 text-[#C9A227] shrink-0" />
-              <span>Бесплатная доставка от <strong className="font-bold text-[#2A2421]">2 000 000 сум</strong></span>
-            </div>
           </div>
 
           {/* Tabs Navigation: Описание, Состав, Применение */}

@@ -358,6 +358,10 @@ export interface LeadPatch {
   staffNote?: string | null;
 }
 
+const STATUS_LABELS: Record<LeadStatus, string> = {
+  new: 'Новая', contacted: 'Связались', confirmed: 'Подтверждена', completed: 'Выполнена', cancelled: 'Отменена'
+};
+
 export async function updateLead(pool: Pool, id: string, patch: LeadPatch, actor: string): Promise<LeadView> {
   return withTransaction(pool, async (db) => {
     // Row lock: two staff members changing the same lead are serialised, so a transition is validated
@@ -370,8 +374,8 @@ export async function updateLead(pool: Pool, id: string, patch: LeadPatch, actor
     if (statusChanges && !LEAD_TRANSITIONS[current.status].includes(patch.status!)) {
       throw new HttpError(409, 'invalid_transition',
         LEAD_TRANSITIONS[current.status].length
-          ? `Нельзя перевести заявку из «${current.status}» в «${patch.status}»`
-          : `Заявка уже закрыта («${current.status}») и не может быть изменена`,
+          ? `Нельзя перевести заявку из «${STATUS_LABELS[current.status]}» в «${STATUS_LABELS[patch.status!]}»`
+          : `Заявка уже закрыта («${STATUS_LABELS[current.status]}») и не может быть изменена`,
         { from: current.status, to: patch.status, allowed: LEAD_TRANSITIONS[current.status] });
     }
 

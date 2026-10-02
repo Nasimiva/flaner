@@ -3,7 +3,9 @@ import { useShop } from '../context/ShopContext';
 import { Order, OrderStatus, Product, CategoryId } from '../types';
 import { formatPrice, formatDate } from '../utils/formatters';
 import { triggerHaptic } from '../utils/telegram';
+import { AdminLeads } from './AdminLeads';
 import {
+  ClipboardList,
   Package,
   ShoppingBag,
   BarChart3,
@@ -53,7 +55,8 @@ export const AdminPanel: React.FC = () => {
     resetDemoData
   } = useShop();
 
-  const [activeTab, setActiveTab] = useState<'orders' | 'products' | 'analytics' | 'bot'>('orders');
+  const [activeTab, setActiveTab] = useState<'leads' | 'orders' | 'products' | 'analytics' | 'bot'>('leads');
+  const [newLeadsCount, setNewLeadsCount] = useState(0);
 
   // Orders filtering
   const [orderStatusFilter, setOrderStatusFilter] = useState<OrderStatus | 'all'>('all');
@@ -398,7 +401,7 @@ export const AdminPanel: React.FC = () => {
                 </span>
               </div>
               <p className="text-[11px] text-[#A89A90] hidden sm:block">
-                Управление заказами, каталогом косметики и Telegram-ботом @flaneruz_bot
+                Заявки клиентов, каталог косметики и Telegram-бот @flaneruz_bot
               </p>
             </div>
           </div>
@@ -418,16 +421,34 @@ export const AdminPanel: React.FC = () => {
         {/* Navigation Tabs */}
         <div className="flex items-center space-x-2 overflow-x-auto pb-1 no-scrollbar border-b border-[#E0D7CE]">
           <button
+            onClick={() => setActiveTab('leads')}
+            data-testid="admin-tab-leads"
+            className={`flex items-center space-x-2 px-4 py-2.5 font-semibold text-xs rounded-xl transition-all whitespace-nowrap ${
+              activeTab === 'leads'
+                ? 'bg-[#2A2421] text-white shadow-sm'
+                : 'text-[#6E5C51] hover:bg-[#EAE1D7]'
+            }`}
+          >
+            <ClipboardList className="w-4 h-4" />
+            <span>Заявки</span>
+            {newLeadsCount > 0 && (
+              <span data-testid="new-leads-badge" className="bg-[#C9A227] text-white text-[10px] px-1.5 py-0.2 rounded-full">
+                {newLeadsCount}
+              </span>
+            )}
+          </button>
+
+          <button
             onClick={() => setActiveTab('orders')}
-            className={`flex items-center space-x-2 px-4 py-2.5 font-semibold text-xs rounded-xl transition-all ${
+            className={`flex items-center space-x-2 px-4 py-2.5 font-semibold text-xs rounded-xl transition-all whitespace-nowrap ${
               activeTab === 'orders'
                 ? 'bg-[#2A2421] text-white shadow-sm'
                 : 'text-[#6E5C51] hover:bg-[#EAE1D7]'
             }`}
           >
             <Package className="w-4 h-4" />
-            <span>Заказы клиентов</span>
-            <span className="bg-white/20 text-white text-[10px] px-1.5 py-0.2 rounded-full">
+            <span>Старые заказы</span>
+            <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${activeTab === 'orders' ? 'bg-white/20 text-white' : 'bg-[#E2D8CE] text-[#52443C]'}`}>
               {orders.length}
             </span>
           </button>
@@ -472,7 +493,10 @@ export const AdminPanel: React.FC = () => {
           </button>
         </div>
 
-        {/* TAB 1: ORDERS DASHBOARD */}
+        {/* TAB 0: LEADS (заявки) */}
+        {activeTab === 'leads' && <AdminLeads onNewCount={setNewLeadsCount} />}
+
+        {/* TAB 1: ORDERS DASHBOARD (legacy orders, kept until the old API is removed) */}
         {activeTab === 'orders' && (
           <div className="space-y-4">
             {/* Filter and Search Bar */}

@@ -16,7 +16,6 @@ import {
   ShoppingBag,
   ArrowRight,
   ShieldCheck,
-  Truck,
   PhoneCall,
   Heart,
   CheckCircle,
@@ -115,10 +114,6 @@ const ShopContent: React.FC = () => {
                   <span className="flex items-center space-x-1 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full">
                     <ShieldCheck className="w-3 h-3 text-[#C9A227]" />
                     <span>100% Оригинал</span>
-                  </span>
-                  <span className="flex items-center space-x-1 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full">
-                    <Truck className="w-3 h-3 text-[#C9A227]" />
-                    <span>Бесплатная доставка от 2 000 000 сум</span>
                   </span>
                   <span className="flex items-center space-x-1 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full">
                     <PhoneCall className="w-3 h-3 text-[#C9A227]" />

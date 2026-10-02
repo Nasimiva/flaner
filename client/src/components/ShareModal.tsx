@@ -48,7 +48,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose }) => {
       try {
         await navigator.share({
           title: 'flaner_cosmetics — Бутик косметики и парфюмерии',
-          text: 'Премиальная косметика и селективная парфюмерия flaner_cosmetics. Бесплатная доставка от 2 млн сум!',
+          text: 'Премиальная косметика и селективная парфюмерия flaner_cosmetics.',
           url: currentUrl,
         });
       } catch {
