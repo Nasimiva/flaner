@@ -36,8 +36,15 @@ const ShopContent: React.FC = () => {
     currency,
     isShareOpen,
     setIsShareOpen,
+    isCartOpen,
+    isLeadFormOpen,
+    isFavoritesOpen,
+    selectedProductForDetail,
     toast
   } = useShop();
+
+  // While a dialog is open the toast moves to the very top edge so it never covers the dialog's header or form fields.
+  const dialogOpen = isCartOpen || isLeadFormOpen || isFavoritesOpen || isShareOpen || selectedProductForDetail !== null;
 
   if (isAdminOpen) {
     return <AdminAccess />;
@@ -231,7 +238,11 @@ const ShopContent: React.FC = () => {
 
         {/* Global Toast Notification */}
         {toast && (
-          <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 animate-slide-up">
+          <div
+            role="status"
+            aria-live="polite"
+            className={`fixed ${dialogOpen ? 'top-2' : 'top-14'} left-1/2 -translate-x-1/2 z-[70] w-max max-w-[calc(100vw-1.5rem)] pointer-events-none animate-slide-up`}
+          >
             <div
               className={`px-4 py-2.5 rounded-2xl shadow-xl text-xs font-semibold flex items-center space-x-2 border ${
                 toast.type === 'error'
@@ -246,7 +257,7 @@ const ShopContent: React.FC = () => {
               ) : (
                 <CheckCircle className="w-4 h-4 text-[#C9A227]" />
               )}
-              <span>{toast.message}</span>
+              <span className="line-clamp-2">{toast.message}</span>
             </div>
           </div>
         )}

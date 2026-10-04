@@ -51,7 +51,7 @@ export const CartDrawer: React.FC = () => {
                   triggerHaptic('warning');
                   clearCart();
                 }}
-                className="text-xs text-[#8A796F] hover:text-[#A64B2A] transition-colors p-1"
+                className="text-xs text-[#8A796F] hover:text-[#A64B2A] transition-colors p-2.5"
                 title="Очистить корзину"
                 aria-label="Очистить корзину"
               >
@@ -61,7 +61,7 @@ export const CartDrawer: React.FC = () => {
             <button
               onClick={() => setIsCartOpen(false)}
               aria-label="Закрыть корзину"
-              className="w-8 h-8 rounded-full bg-[#EFE9E2] hover:bg-[#E2D8CE] flex items-center justify-center text-[#4A3E37] transition-colors"
+              className="w-10 h-10 rounded-full bg-[#EFE9E2] hover:bg-[#E2D8CE] flex items-center justify-center text-[#4A3E37] transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -129,7 +129,7 @@ export const CartDrawer: React.FC = () => {
                     <button
                       onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
                       aria-label="Уменьшить количество"
-                      className="w-6 h-6 rounded-lg bg-white hover:bg-[#EBE3DB] flex items-center justify-center text-[#2A2421] transition-colors"
+                      className="w-9 h-9 shrink-0 rounded-lg bg-white hover:bg-[#EBE3DB] flex items-center justify-center text-[#2A2421] transition-colors"
                     >
                       <Minus className="w-3 h-3" />
                     </button>
@@ -139,7 +139,7 @@ export const CartDrawer: React.FC = () => {
                     <button
                       onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
                       aria-label="Увеличить количество"
-                      className="w-6 h-6 rounded-lg bg-white hover:bg-[#EBE3DB] flex items-center justify-center text-[#2A2421] transition-colors"
+                      className="w-9 h-9 shrink-0 rounded-lg bg-white hover:bg-[#EBE3DB] flex items-center justify-center text-[#2A2421] transition-colors"
                     >
                       <Plus className="w-3 h-3" />
                     </button>

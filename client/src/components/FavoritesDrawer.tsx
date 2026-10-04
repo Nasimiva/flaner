@@ -38,7 +38,7 @@ export const FavoritesDrawer: React.FC = () => {
           <button
             onClick={() => setIsFavoritesOpen(false)}
             aria-label="Закрыть избранное"
-            className="w-8 h-8 rounded-full bg-[#EFE9E2] hover:bg-[#E2D8CE] flex items-center justify-center text-[#4A3E37] transition-colors"
+            className="w-10 h-10 rounded-full bg-[#EFE9E2] hover:bg-[#E2D8CE] flex items-center justify-center text-[#4A3E37] transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -98,7 +98,7 @@ export const FavoritesDrawer: React.FC = () => {
                       onClick={() => toggleFavorite(product.id)}
                       aria-label={`Убрать ${product.name} из избранного`}
                       title="Убрать из избранного"
-                      className="w-7 h-7 rounded-full bg-[#FBEFEA] hover:bg-[#F5DCD2] flex items-center justify-center text-[#A64B2A] transition-colors"
+                      className="w-10 h-10 rounded-full bg-[#FBEFEA] hover:bg-[#F5DCD2] flex items-center justify-center text-[#A64B2A] transition-colors"
                     >
                       <Heart className="w-3.5 h-3.5 fill-[#A64B2A]" />
                     </button>

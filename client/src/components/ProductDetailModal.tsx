@@ -55,14 +55,14 @@ export const ProductDetailModal: React.FC = () => {
               aria-label={isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'}
               aria-pressed={isFavorite}
               title={isFavorite ? 'Убрать из избранного' : 'В избранное'}
-              className="w-8 h-8 rounded-full bg-[#EFE9E2] hover:bg-[#E2D8CE] flex items-center justify-center transition-colors"
+              className="w-10 h-10 rounded-full bg-[#EFE9E2] hover:bg-[#E2D8CE] flex items-center justify-center transition-colors"
             >
               <Heart className={`w-4 h-4 ${isFavorite ? 'text-[#A64B2A] fill-[#A64B2A]' : 'text-[#4A3E37]'}`} />
             </button>
             <button
               onClick={closeProductDetail}
               aria-label="Закрыть"
-              className="w-8 h-8 rounded-full bg-[#EFE9E2] hover:bg-[#E2D8CE] flex items-center justify-center text-[#4A3E37] transition-colors"
+              className="w-10 h-10 rounded-full bg-[#EFE9E2] hover:bg-[#E2D8CE] flex items-center justify-center text-[#4A3E37] transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -89,8 +89,17 @@ export const ProductDetailModal: React.FC = () => {
 
               {/* Status pill */}
               <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-xs text-[#2A2421] text-[11px] font-semibold px-2.5 py-1 rounded-full border border-[#DFD6CD] flex items-center space-x-1">
-                <Check className="w-3 h-3 text-emerald-600" />
-                <span>В наличии ({product.stockCount} шт)</span>
+                {product.inStock ? (
+                  <>
+                    <Check className="w-3 h-3 text-emerald-600" />
+                    <span>В наличии</span>
+                  </>
+                ) : (
+                  <>
+                    <X className="w-3 h-3 text-[#A64B2A]" />
+                    <span>Нет в наличии</span>
+                  </>
+                )}
               </div>
             </div>
 
@@ -234,6 +243,16 @@ export const ProductDetailModal: React.FC = () => {
 
         {/* Bottom Actions Bar (Telegram Web App friendly) */}
         <div className="p-4 bg-white border-t border-[#EAE3DC] flex items-center space-x-3">
+          {!product.inStock ? (
+            <button
+              type="button"
+              disabled
+              className="flex-1 min-h-12 bg-[#F3EEEA] text-[#8A796F] py-3.5 px-4 rounded-2xl font-semibold text-sm border border-[#E5DDD4] cursor-not-allowed"
+            >
+              Нет в наличии
+            </button>
+          ) : (
+            <>
           {/* Quantity Selector */}
           <div className="flex items-center bg-[#F3ECE5] rounded-2xl p-1 border border-[#DFD6CD]">
             <button
@@ -241,7 +260,7 @@ export const ProductDetailModal: React.FC = () => {
                 triggerHaptic('selection');
                 setQuantity(Math.max(1, quantity - 1));
               }}
-              className="w-8 h-8 rounded-xl bg-white hover:bg-[#EBE3DB] flex items-center justify-center text-[#2A2421] transition-colors"
+              className="w-10 h-10 rounded-xl bg-white hover:bg-[#EBE3DB] flex items-center justify-center text-[#2A2421] transition-colors"
             >
               <Minus className="w-3.5 h-3.5" />
             </button>
@@ -253,7 +272,7 @@ export const ProductDetailModal: React.FC = () => {
                 triggerHaptic('selection');
                 setQuantity(quantity + 1);
               }}
-              className="w-8 h-8 rounded-xl bg-white hover:bg-[#EBE3DB] flex items-center justify-center text-[#2A2421] transition-colors"
+              className="w-10 h-10 rounded-xl bg-white hover:bg-[#EBE3DB] flex items-center justify-center text-[#2A2421] transition-colors"
             >
               <Plus className="w-3.5 h-3.5" />
             </button>
@@ -269,6 +288,8 @@ export const ProductDetailModal: React.FC = () => {
               В корзину • {formatPrice(product.price * quantity, currency)}
             </span>
           </button>
+            </>
+          )}
         </div>
 
         {alreadyInCartCount > 0 && (

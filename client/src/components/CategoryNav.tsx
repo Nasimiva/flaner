@@ -73,7 +73,7 @@ export const CategoryNav: React.FC = () => {
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8A796F] hover:text-[#2A2421] p-0.5"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8A796F] hover:text-[#2A2421] p-2.5"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -81,13 +81,13 @@ export const CategoryNav: React.FC = () => {
         </div>
 
         {/* Sort selector */}
-        <div className="flex items-center space-x-2 bg-white/90 border border-[#E0D7CE] rounded-full px-3 py-2 text-xs text-[#52443C] self-end sm:self-auto w-auto">
+        <div className="flex items-center space-x-2 bg-white/90 border border-[#E0D7CE] rounded-full px-3 py-0 min-h-10 text-xs text-[#52443C] self-end sm:self-auto w-auto">
           <ArrowUpDown className="w-3.5 h-3.5 text-[#8A796F]" />
           <span className="text-[#8A796F] hidden xs:inline">Сортировка:</span>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as any)}
-            className="bg-transparent font-medium focus:outline-none cursor-pointer text-[#2A2421]"
+            className="bg-transparent font-medium focus:outline-none cursor-pointer text-[#2A2421] min-h-10 py-2"
           >
             <option value="popular">По популярности</option>
             <option value="price-asc">Сначала дешевле</option>
@@ -108,7 +108,7 @@ export const CategoryNav: React.FC = () => {
             <button
               key={cat.id}
               onClick={() => handleCategoryClick(cat.id)}
-              className={`flex items-center space-x-2 px-3.5 py-2 rounded-full text-xs font-medium whitespace-nowrap transition-all flex-shrink-0 ${
+              className={`flex items-center space-x-2 px-4 py-2.5 min-h-10 rounded-full text-xs font-medium whitespace-nowrap transition-all flex-shrink-0 ${
                 isActive
                   ? 'bg-[#2A2421] text-[#F9F7F5] shadow-sm'
                   : 'bg-white/80 text-[#5B4C43] border border-[#E5DDD4] hover:bg-[#F0E8E0] hover:text-[#2A2421]'

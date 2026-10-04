@@ -27,7 +27,7 @@ export const Header: React.FC = () => {
       <div className="bg-[#2A2421] text-[#E8DDD4] text-xs px-3 py-1.5 flex items-center justify-between">
         <div className="flex items-center space-x-2">
           <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span className="font-medium tracking-wide">Telegram Mini App Live</span>
+          <span className="font-medium tracking-wide whitespace-nowrap">Telegram Mini App<span className="hidden min-[360px]:inline"> Live</span></span>
           {telegramUser ? (
             <span className="hidden sm:inline-flex items-center text-[#C4B7AB] ml-1">
               • Привет, {telegramUser.first_name || telegramUser.username}!
@@ -46,7 +46,7 @@ export const Header: React.FC = () => {
               <button
                 key={curr}
                 onClick={() => setCurrency(curr)}
-                className={`px-2 py-0.5 text-[11px] font-semibold rounded-full transition-colors ${
+                className={`px-2.5 py-2 min-h-9 text-xs font-semibold rounded-full transition-colors ${
                   currency === curr
                     ? 'bg-[#E8DDD4] text-[#2A2421]'
                     : 'text-[#C4B7AB] hover:text-white'

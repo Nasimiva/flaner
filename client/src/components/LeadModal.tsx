@@ -9,7 +9,7 @@ import { X, Phone, User, CheckCircle, Copy, Check, MessageSquare, AlertCircle, P
 type FieldErrors = Partial<Record<LeadField, string>>;
 
 const inputClass = (hasError?: string) =>
-  `w-full px-3 py-2 text-xs bg-[#FAF8F5] border rounded-xl focus:outline-none focus:border-[#2A2421] text-[#2A2421] ${
+  `w-full px-3 py-3 min-h-11 text-sm bg-[#FAF8F5] border rounded-xl focus:outline-none focus:border-[#2A2421] text-[#2A2421] ${
     hasError ? 'border-red-500' : 'border-[#DFD6CD]'
   }`;
 
@@ -136,7 +136,7 @@ export const LeadModal: React.FC = () => {
           <button
             onClick={close}
             aria-label="Закрыть"
-            className="w-8 h-8 rounded-full bg-[#EFE9E2] hover:bg-[#E2D8CE] flex items-center justify-center text-[#4A3E37] transition-colors"
+            className="w-10 h-10 rounded-full bg-[#EFE9E2] hover:bg-[#E2D8CE] flex items-center justify-center text-[#4A3E37] transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -164,7 +164,7 @@ export const LeadModal: React.FC = () => {
                 <button
                   onClick={copyNumber}
                   aria-label="Скопировать номер заявки"
-                  className="w-7 h-7 rounded-lg bg-[#F5EFEB] hover:bg-[#E8DDD4] flex items-center justify-center text-[#4A3E37] transition-colors"
+                  className="w-10 h-10 rounded-lg bg-[#F5EFEB] hover:bg-[#E8DDD4] flex items-center justify-center text-[#4A3E37] transition-colors"
                 >
                   {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                 </button>

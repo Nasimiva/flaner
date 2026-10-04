@@ -126,23 +126,40 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // The catalog is always loaded from the shared server database.
   const catalogRequest = useRef<Promise<void> | null>(null);
+  const lastCatalogBody = useRef<string | null>(null);
+  const lastCatalogAttempt = useRef(0);
+  const catalogFailures = useRef(0);
 
-  // `silent` refreshes (focus, timer, opening the cart) never toast: they keep the last good catalog on failure.
+  // `silent` refreshes (timer, focus, opening the cart) never toast: they keep the last good catalog on failure.
   const loadCatalog = (options: { silent?: boolean } = {}): Promise<void> => {
     // Parallel triggers (focus + visibility + timer) share one request.
     if (catalogRequest.current) return catalogRequest.current;
     const request = (async () => {
       try {
-        const response = await fetch('/api/products', { cache: 'no-store' });
+        // 'no-cache' always revalidates with the server (ETag), so an unchanged catalog costs a tiny 304 response.
+        const response = await fetch('/api/products', { cache: 'no-cache' });
         if (!response.ok) throw new Error('Не удалось загрузить каталог с сервера.');
-        const data: unknown = await response.json();
+        const body = await response.text();
+        let data: unknown;
+        try {
+          data = JSON.parse(body);
+        } catch {
+          throw new Error('Сервер вернул некорректный каталог товаров.');
+        }
         if (!Array.isArray(data)) throw new Error('Сервер вернул некорректный каталог товаров.');
-        setProducts(data as Product[]);
+        // An identical catalog keeps the current state, so a poll that found nothing new re-renders nothing.
+        if (body !== lastCatalogBody.current) {
+          lastCatalogBody.current = body;
+          setProducts(data as Product[]);
+        }
+        catalogFailures.current = 0;
         setCatalogLoaded(true);
       } catch (error: unknown) {
         console.error('Could not load product catalog:', error);
+        catalogFailures.current += 1;
         if (!options.silent) showToast(error instanceof Error ? error.message : 'Не удалось загрузить каталог.', 'error');
       } finally {
+        lastCatalogAttempt.current = Date.now();
         catalogRequest.current = null;
       }
     })();
@@ -154,21 +171,38 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     void loadCatalog();
   }, []);
 
-  // Keep prices and stock current while the page stays open: refetch when the shopper returns to the tab and every
-  // minute while it is visible, so the site and the Telegram Mini App show the same catalog as the admin edits it.
+  // Keep prices and stock current while the page is open and visible: check every 15 s (cheap 304 when nothing changed),
+  // back off after failures (up to 2 min), pause while hidden, and re-check at once when the shopper comes back.
   useEffect(() => {
-    const refresh = () => {
-      if (document.visibilityState === 'visible') void loadCatalog({ silent: true });
+    const POLL_MS = 15_000;
+    const MAX_DELAY_MS = 120_000;
+    let timer: number | undefined;
+    const schedule = () => {
+      window.clearTimeout(timer);
+      if (document.visibilityState !== 'visible') return;
+      const delay = Math.min(MAX_DELAY_MS, POLL_MS * 2 ** Math.min(catalogFailures.current, 4));
+      timer = window.setTimeout(() => {
+        void loadCatalog({ silent: true }).then(schedule);
+      }, delay);
     };
-    const timer = window.setInterval(refresh, 60_000);
-    document.addEventListener('visibilitychange', refresh);
-    window.addEventListener('focus', refresh);
-    window.addEventListener('online', refresh);
+    const refreshNow = () => {
+      if (document.visibilityState !== 'visible') {
+        window.clearTimeout(timer);
+        return;
+      }
+      // focus + visibilitychange usually arrive together: one request is enough.
+      if (Date.now() - lastCatalogAttempt.current > 3_000) void loadCatalog({ silent: true }).then(schedule);
+      else schedule();
+    };
+    schedule();
+    document.addEventListener('visibilitychange', refreshNow);
+    window.addEventListener('focus', refreshNow);
+    window.addEventListener('online', refreshNow);
     return () => {
-      window.clearInterval(timer);
-      document.removeEventListener('visibilitychange', refresh);
-      window.removeEventListener('focus', refresh);
-      window.removeEventListener('online', refresh);
+      window.clearTimeout(timer);
+      document.removeEventListener('visibilitychange', refreshNow);
+      window.removeEventListener('focus', refreshNow);
+      window.removeEventListener('online', refreshNow);
     };
   }, []);
 
@@ -235,12 +269,20 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setOrders(result as Order[]);
   };
 
+  const toastTimer = useRef<number | undefined>(undefined);
   const showToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
     setToast({ message, type });
-    setTimeout(() => {
+    // A newer toast restarts the timer, so an older timeout can no longer hide it early.
+    window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => {
       setToast(null);
     }, 3200);
   };
+
+  // A confirmation like «добавлен в корзину» is stale once the shopper opens the cart or the form.
+  useEffect(() => {
+    if (isCartOpen || isLeadFormOpen) setToast((current) => (current && current.type === 'success' ? null : current));
+  }, [isCartOpen, isLeadFormOpen]);
 
   const openProductDetail = (product: Product) => {
     triggerHaptic('light');

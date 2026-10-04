@@ -51,12 +51,17 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           src={product.images[0]}
           alt={product.name}
           referrerPolicy="no-referrer"
-          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+          className={`w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500 ${product.inStock ? '' : 'grayscale opacity-60'}`}
           loading="lazy"
         />
 
         {/* Badges */}
         <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 z-10">
+          {!product.inStock && (
+            <span className="bg-[#2A2421] text-white text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider">
+              Нет в наличии
+            </span>
+          )}
           {product.isBestseller && (
             <span className="bg-[#2A2421]/90 backdrop-blur-xs text-[#E8DDD4] text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider">
               Хит продаж
@@ -80,7 +85,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           aria-label={isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'}
           aria-pressed={isFavorite}
           title={isFavorite ? 'Убрать из избранного' : 'В избранное'}
-          className="absolute top-2.5 right-2.5 z-20 w-8 h-8 rounded-full bg-white/90 hover:bg-white backdrop-blur-xs shadow-sm flex items-center justify-center transition-all active:scale-90"
+          className="absolute top-1.5 right-1.5 z-20 w-10 h-10 rounded-full bg-white/90 hover:bg-white backdrop-blur-xs shadow-sm flex items-center justify-center transition-all active:scale-90"
         >
           <Heart className={`w-4 h-4 transition-colors ${isFavorite ? 'text-[#A64B2A] fill-[#A64B2A]' : 'text-[#6E5C51]'}`} />
         </button>
@@ -140,10 +145,33 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           </div>
 
           {/* Add to Cart button or stepper */}
-          {currentQuantity === 0 ? (
+          {!product.inStock ? (
+            <div onClick={(e) => e.stopPropagation()} className="w-full flex items-center gap-2">
+              <button
+                type="button"
+                disabled
+                className="flex-1 min-h-10 flex items-center justify-center bg-[#F3EEEA] text-[#8A796F] py-2 px-3 rounded-xl font-semibold text-xs border border-[#E5DDD4] cursor-not-allowed"
+              >
+                Нет в наличии
+              </button>
+              {currentQuantity > 0 && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    updateQuantity(product.id, 0);
+                  }}
+                  aria-label="Убрать из корзины"
+                  className="min-h-10 px-3 rounded-xl bg-[#FAF0ED] text-[#A64B2A] text-xs font-semibold border border-[#F0D9D0] active:scale-95"
+                >
+                  Убрать
+                </button>
+              )}
+            </div>
+          ) : currentQuantity === 0 ? (
             <button
               onClick={handleAddToCart}
-              className="w-full flex items-center justify-center space-x-2 bg-[#F5EFEB] hover:bg-[#2A2421] text-[#2A2421] hover:text-white py-2 px-3 rounded-xl font-medium text-xs transition-all border border-[#DFD6CD] hover:border-[#2A2421] active:scale-95"
+              className="w-full min-h-10 flex items-center justify-center space-x-2 bg-[#F5EFEB] hover:bg-[#2A2421] text-[#2A2421] hover:text-white py-2 px-3 rounded-xl font-medium text-xs transition-all border border-[#DFD6CD] hover:border-[#2A2421] active:scale-95"
             >
               <ShoppingBag className="w-3.5 h-3.5" />
               <span>В корзину</span>
@@ -155,7 +183,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             >
               <button
                 onClick={handleDecrement}
-                className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors active:scale-90"
+                aria-label="Уменьшить количество"
+                className="w-9 h-9 shrink-0 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors active:scale-90"
               >
                 <Minus className="w-3.5 h-3.5" />
               </button>
@@ -164,7 +193,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
               </span>
               <button
                 onClick={handleIncrement}
-                className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors active:scale-90"
+                aria-label="Увеличить количество"
+                className="w-9 h-9 shrink-0 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors active:scale-90"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
