@@ -103,7 +103,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [sortBy, setSortBy] = useState<'popular' | 'price-asc' | 'price-desc' | 'rating'>('popular');
   const [currency, setCurrency] = useState<Currency>('UZS');
 
-  const [selectedProductForDetail, setSelectedProductForDetail] = useState<Product | null>(null);
+  // Only the id is kept: the product itself is looked up in the live catalog, so an open card never shows stale data.
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isLeadFormOpen, setIsLeadFormOpen] = useState(false);
   const [isFavoritesOpen, setIsFavoritesOpen] = useState(false);
@@ -124,25 +125,61 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   // The catalog is always loaded from the shared server database.
-  const loadCatalog = () =>
-    fetch('/api/products')
-      .then(async (response) => {
+  const catalogRequest = useRef<Promise<void> | null>(null);
+
+  // `silent` refreshes (focus, timer, opening the cart) never toast: they keep the last good catalog on failure.
+  const loadCatalog = (options: { silent?: boolean } = {}): Promise<void> => {
+    // Parallel triggers (focus + visibility + timer) share one request.
+    if (catalogRequest.current) return catalogRequest.current;
+    const request = (async () => {
+      try {
+        const response = await fetch('/api/products', { cache: 'no-store' });
         if (!response.ok) throw new Error('Не удалось загрузить каталог с сервера.');
         const data: unknown = await response.json();
         if (!Array.isArray(data)) throw new Error('Сервер вернул некорректный каталог товаров.');
         setProducts(data as Product[]);
         setCatalogLoaded(true);
-      })
-      .catch((error: unknown) => {
+      } catch (error: unknown) {
         console.error('Could not load product catalog:', error);
-        showToast(error instanceof Error ? error.message : 'Не удалось загрузить каталог.', 'error');
-      });
+        if (!options.silent) showToast(error instanceof Error ? error.message : 'Не удалось загрузить каталог.', 'error');
+      } finally {
+        catalogRequest.current = null;
+      }
+    })();
+    catalogRequest.current = request;
+    return request;
+  };
 
   useEffect(() => {
     void loadCatalog();
   }, []);
 
+  // Keep prices and stock current while the page stays open: refetch when the shopper returns to the tab and every
+  // minute while it is visible, so the site and the Telegram Mini App show the same catalog as the admin edits it.
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === 'visible') void loadCatalog({ silent: true });
+    };
+    const timer = window.setInterval(refresh, 60_000);
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('focus', refresh);
+    window.addEventListener('online', refresh);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('online', refresh);
+    };
+  }, []);
+
+  // The prices in the cart and in the lead form must be the ones the backend will use.
+  useEffect(() => {
+    if (isCartOpen || isLeadFormOpen) void loadCatalog({ silent: true });
+  }, [isCartOpen, isLeadFormOpen]);
+
   const productById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
+
+  const selectedProductForDetail: Product | null = selectedProductId ? productById.get(selectedProductId) ?? null : null;
 
   // Live view of the cart: each stored line joined with the current catalog entry.
   const cart: CartItem[] = useMemo(
@@ -207,11 +244,11 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const openProductDetail = (product: Product) => {
     triggerHaptic('light');
-    setSelectedProductForDetail(product);
+    setSelectedProductId(product.id);
   };
 
   const closeProductDetail = () => {
-    setSelectedProductForDetail(null);
+    setSelectedProductId(null);
   };
 
   const addToCart = (product: Product, quantity = 1) => {

@@ -482,6 +482,19 @@ describe('POST /api/leads', () => {
   });
 });
 
+describe('legacy order endpoints are not an open door', () => {
+  it('rate limits anonymous POST /api/orders so stock cannot be drained in a loop', async () => {
+    const base = await startServer(await freePort());
+    const statuses: number[] = [];
+    for (let i = 0; i < 12; i++) statuses.push((await call('POST', '/api/orders', { items: [] }, {}, base)).status);
+    assert.deepEqual(statuses, [...Array(10).fill(400), 429, 429]);
+  });
+
+  it('POST /api/telegram/send-order needs an admin session', async () => {
+    assert.equal((await call('POST', '/api/telegram/send-order', { order: { id: 'ord-x' } })).status, 401);
+  });
+});
+
 // ---------------------------------------------------------------------------------------------
 // Admin endpoints
 // ---------------------------------------------------------------------------------------------

@@ -1,4 +1,5 @@
 import express from 'express';
+import { rateLimit } from 'express-rate-limit';
 import path from 'path';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
@@ -182,7 +183,17 @@ app.use('/api/admin/leads', requireAdmin, leadRouters.adminRouter);
 
 // Orders are persisted in PostgreSQL. The browser may submit customer details and
 // item IDs, but prices, totals, delivery fees, and payment state are server-owned.
-app.post('/api/orders', async (req, res) => {
+// Legacy direct-order endpoint. It is the only public route that changes stock, so it is rate limited per client IP
+// (the shopper-facing checkout is POST /api/leads, which reserves nothing).
+const legacyOrderLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  handler: (_req, res) => res.status(429).json({ error: 'Too many orders from this address. Try again later.', code: 'rate_limited' })
+});
+
+app.post('/api/orders', legacyOrderLimiter, async (req, res) => {
   const submitted = req.body;
   const items = submitted?.items;
   const customer = submitted?.customer;
@@ -395,7 +406,8 @@ app.post('/api/telegram/admin-chat', requireAdmin, (req, res) => {
 });
 
 // Send new order alert to Telegram
-app.post('/api/telegram/send-order', async (req, res) => {
+// Admin only: it sends messages through the shop's bot, so an anonymous caller must not be able to trigger it.
+app.post('/api/telegram/send-order', requireAdmin, async (req, res) => {
   try {
     const { customerChatId } = req.body;
     const orderId = req.body?.order?.id;
