@@ -3,12 +3,44 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>flaner_cosmetics — Telegram Web App</title>
-    <meta name="description" content="flaner_cosmetics — онлайн-бутик селективной косметики и парфюмерии в Telegram (бот @flaneruz_bot) с корзиной, приемом платежей и интеграцией Telegram Bot API." />
-    <meta property="og:title" content="flaner_cosmetics — Telegram Web App" />
-    <meta property="og:description" content="flaner_cosmetics — онлайн-бутик селективной косметики и парфюмерии в Telegram (бот @flaneruz_bot) с корзиной, приемом платежей и интеграцией Telegram Bot API." />
+    <title>Flaner — селективная косметика и нишевая парфюмерия | flaner.uz</title>
+    <meta name="description" content="Flaner — онлайн-бутик селективной косметики и нишевой парфюмерии. Оригинальная продукция, каталог, избранное и заявка онлайн. Также доступно в Telegram: @flaneruz_bot." />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="theme-color" content="#F9F7F5" />
+    <link rel="canonical" href="https://flaner.uz/" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta property="og:site_name" content="Flaner" />
+    <meta property="og:locale" content="ru_RU" />
+    <meta property="og:url" content="https://flaner.uz/" />
+    <meta property="og:title" content="Flaner — селективная косметика и нишевая парфюмерия" />
+    <meta property="og:description" content="Flaner — онлайн-бутик селективной косметики и нишевой парфюмерии. Оригинальная продукция, каталог, избранное и заявка онлайн. Также доступно в Telegram: @flaneruz_bot." />
     <meta property="og:type" content="website" />
-    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Flaner — селективная косметика и нишевая парфюмерия" />
+    <meta name="twitter:description" content="Flaner — онлайн-бутик селективной косметики и нишевой парфюмерии. Оригинальная продукция, каталог, избранное и заявка онлайн. Также доступно в Telegram: @flaneruz_bot." />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://flaner.uz/#organization",
+            "name": "Flaner",
+            "alternateName": "flaner_cosmetics",
+            "url": "https://flaner.uz/",
+            "sameAs": ["https://t.me/flaneruz_bot"]
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://flaner.uz/#website",
+            "url": "https://flaner.uz/",
+            "name": "Flaner",
+            "inLanguage": "ru",
+            "publisher": { "@id": "https://flaner.uz/#organization" }
+          }
+        ]
+      }
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -17,6 +49,10 @@
   </head>
   <body class="bg-[#F9F7F5] text-[#221F1F] antialiased selection:bg-[#E8DDD4] selection:text-[#221F1F]">
     <div id="root"></div>
+    <noscript>
+      <h1>Flaner — селективная косметика и нишевая парфюмерия</h1>
+      <p>Оригинальная продукция ведущих мировых домов красоты. Для просмотра каталога включите JavaScript или откройте бутик в Telegram: @flaneruz_bot.</p>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

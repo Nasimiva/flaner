@@ -41,6 +41,8 @@ app.use((req, res, next) => {
   res.header('X-Frame-Options', 'SAMEORIGIN');
   res.header('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  // API responses are not pages: keep them out of search indexes.
+  if (req.path.startsWith('/api/')) res.header('X-Robots-Tag', 'noindex, nofollow');
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
@@ -599,7 +601,13 @@ const clientDist = path.resolve(process.cwd(), '../client/dist');
   app.use(express.static(clientDist));
   app.get('*', (req, res) => {
     if (req.path.startsWith('/api/')) return res.status(404).json({ error: 'API endpoint not found' });
-    res.sendFile(path.join(clientDist, 'index.html'));
+    // The storefront is a single-page app served at "/". Any other path (including a missing
+    // robots.txt/sitemap.xml/asset) must not answer 200 with the app shell: that is a soft 404 for crawlers.
+    if (req.path === '/' || req.path === '/index.html') {
+      return res.sendFile(path.join(clientDist, 'index.html'));
+    }
+    if (path.extname(req.path)) return res.status(404).type('text/plain').send('Not found');
+    res.status(404).header('X-Robots-Tag', 'noindex').sendFile(path.join(clientDist, 'index.html'));
   });
 }
 
