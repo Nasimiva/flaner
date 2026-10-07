@@ -9,6 +9,7 @@ import { errorMiddleware } from './http/errors.js';
 import { logger } from './logger.js';
 import { createLeadRouters } from './modules/leads/leadRoutes.js';
 import { formatLeadMessage } from './modules/leads/leadNotification.js';
+import { createSiteContentRouters } from './modules/siteContent/siteContentRoutes.js';
 
 dotenv.config();
 
@@ -182,6 +183,11 @@ const leadRouters = createLeadRouters({
 });
 app.use('/api/leads', leadRouters.publicRouter);
 app.use('/api/admin/leads', requireAdmin, leadRouters.adminRouter);
+
+// Editable storefront content (hero banners, brand strip). Public read, admin write.
+const siteContentRouters = createSiteContentRouters(pool);
+app.use('/api/site-content', siteContentRouters.publicRouter);
+app.use('/api/admin/site-content', requireAdmin, siteContentRouters.adminRouter);
 
 // Orders are persisted in PostgreSQL. The browser may submit customer details and
 // item IDs, but prices, totals, delivery fees, and payment state are server-owned.

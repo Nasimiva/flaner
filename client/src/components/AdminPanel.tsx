@@ -4,6 +4,7 @@ import { Order, OrderStatus, Product, CategoryId } from '../types';
 import { formatPrice, formatDate } from '../utils/formatters';
 import { triggerHaptic } from '../utils/telegram';
 import { AdminLeads } from './AdminLeads';
+import { AdminContent } from './AdminContent';
 import {
   ClipboardList,
   Package,
@@ -55,7 +56,7 @@ export const AdminPanel: React.FC = () => {
     resetDemoData
   } = useShop();
 
-  const [activeTab, setActiveTab] = useState<'leads' | 'orders' | 'products' | 'analytics' | 'bot'>('leads');
+  const [activeTab, setActiveTab] = useState<'leads' | 'orders' | 'products' | 'content' | 'analytics' | 'bot'>('leads');
   const [newLeadsCount, setNewLeadsCount] = useState(0);
 
   // Orders filtering
@@ -81,13 +82,8 @@ export const AdminPanel: React.FC = () => {
     bot?: { id: number; username: string; firstName: string; link: string };
     adminChatId?: string;
   }>({
-    connected: true,
-    bot: {
-      id: 8580114168,
-      username: 'flaneruz_bot',
-      firstName: 'Flaner cosmetics',
-      link: 'https://t.me/flaneruz_bot'
-    },
+    // Unknown until GET /api/telegram/status answers; the bot identity comes from the server, never from the bundle.
+    connected: false,
     adminChatId: ''
   });
   const [adminChatIdInput, setAdminChatIdInput] = useState('');
@@ -469,6 +465,19 @@ export const AdminPanel: React.FC = () => {
           </button>
 
           <button
+            onClick={() => setActiveTab('content')}
+            data-testid="admin-tab-content"
+            className={`flex items-center space-x-2 px-4 py-2.5 font-semibold text-xs rounded-xl transition-all whitespace-nowrap ${
+              activeTab === 'content'
+                ? 'bg-[#2A2421] text-white shadow-sm'
+                : 'text-[#6E5C51] hover:bg-[#EAE1D7]'
+            }`}
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>Контент</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('analytics')}
             className={`flex items-center space-x-2 px-4 py-2.5 font-semibold text-xs rounded-xl transition-all ${
               activeTab === 'analytics'
@@ -495,6 +504,9 @@ export const AdminPanel: React.FC = () => {
 
         {/* TAB 0: LEADS (заявки) */}
         {activeTab === 'leads' && <AdminLeads onNewCount={setNewLeadsCount} />}
+
+        {/* Editable storefront content: hero banners and brand strip */}
+        {activeTab === 'content' && <AdminContent />}
 
         {/* TAB 1: ORDERS DASHBOARD (legacy orders, kept until the old API is removed) */}
         {activeTab === 'orders' && (
@@ -986,13 +998,19 @@ export const AdminPanel: React.FC = () => {
                       <h3 className="text-base font-bold text-[#2A2421]">
                         {botStatus.bot?.firstName || 'Flaner cosmetics'}
                       </h3>
-                      <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800">
-                        <CheckCircle className="w-3 h-3" />
-                        <span>API Подключен</span>
-                      </span>
+                      {botStatus.connected ? (
+                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800">
+                          <CheckCircle className="w-3 h-3" />
+                          <span>API Подключен</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800">
+                          <span>Нет связи с Telegram API</span>
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-[#7A6B62] mt-0.5">
-                      Telegram Бот: <strong className="text-[#2A2421]">@{botStatus.bot?.username || 'flaneruz_bot'}</strong> (ID: {botStatus.bot?.id || '8580114168'})
+                      Telegram Бот: <strong className="text-[#2A2421]">@{botStatus.bot?.username || 'flaneruz_bot'}</strong> {botStatus.bot?.id ? `(ID: ${botStatus.bot.id})` : null}
                     </p>
                   </div>
                 </div>
@@ -1020,23 +1038,14 @@ export const AdminPanel: React.FC = () => {
                 </div>
               </div>
 
-              {/* Token Display Banner */}
+              {/* The bot token is a server secret (TELEGRAM_BOT_TOKEN). It is never sent to or shown in the browser. */}
               <div className="p-4 bg-[#FAF8F5] rounded-2xl border border-[#EAE3DC] space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-[#52443C] flex items-center space-x-1.5">
-                    <Key className="w-3.5 h-3.5 text-[#C9A227]" />
-                    <span>Активный Telegram Bot Token:</span>
-                  </span>
-                  <span className="text-[11px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                    Авторизован в Telegram API
-                  </span>
-                </div>
-                <div className="font-mono text-xs text-[#2A2421] bg-white px-3 py-2 rounded-xl border border-[#DFD6CD] break-all select-all flex items-center justify-between">
-                  <span>8580114168:AAEQuUmq5pVHd0B50syGwJ1pS5BGh4XXgVc</span>
-                  <span className="text-[10px] text-[#8A796F] font-sans ml-2 shrink-0">Bot ID: 8580114168</span>
-                </div>
+                <span className="text-xs font-semibold text-[#52443C] flex items-center space-x-1.5">
+                  <Key className="w-3.5 h-3.5 text-[#C9A227]" />
+                  <span>Токен Telegram-бота</span>
+                </span>
                 <p className="text-[11px] text-[#8A796F]">
-                  Токен привязан к серверу и используется для отправки карточек заказов администратору и push-уведомлений покупателям.
+                  Токен хранится только на сервере в переменной окружения TELEGRAM_BOT_TOKEN и в панели не показывается. Он используется для отправки карточек заявок администратору и уведомлений покупателям.
                 </p>
               </div>
 

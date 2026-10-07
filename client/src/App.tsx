@@ -10,9 +10,12 @@ import { FavoritesDrawer } from './components/FavoritesDrawer';
 import { AdminAccess } from './components/AdminAccess';
 import { TelegramFrame } from './components/TelegramFrame';
 import { ShareModal } from './components/ShareModal';
+import { HeroSlider } from './components/HeroSlider';
+import { BrandMarquee } from './components/BrandMarquee';
+import { useSiteContent } from './utils/useSiteContent';
+import { triggerHaptic } from './utils/telegram';
 import { formatPrice } from './utils/formatters';
 import {
-  Sparkles,
   ShoppingBag,
   ArrowRight,
   ShieldCheck,
@@ -28,6 +31,8 @@ const ShopContent: React.FC = () => {
     products,
     selectedCategory,
     selectedBrand,
+    setSelectedBrand,
+    setSelectedCategory,
     searchQuery,
     sortBy,
     cart,
@@ -46,9 +51,31 @@ const ShopContent: React.FC = () => {
   // While a dialog is open the toast moves to the very top edge so it never covers the dialog's header or form fields.
   const dialogOpen = isCartOpen || isLeadFormOpen || isFavoritesOpen || isShareOpen || selectedProductForDetail !== null;
 
+  // Banners and brands are editable in the admin panel; reload them whenever the admin panel is closed.
+  const siteContent = useSiteContent(isAdminOpen);
+
   if (isAdminOpen) {
     return <AdminAccess />;
   }
+
+  const scrollToCatalog = () => {
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    document.getElementById('catalog')?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+  };
+
+  const handleBannerCategory = (category: 'all' | 'face-care' | 'makeup' | 'perfume') => {
+    setSelectedBrand('all');
+    setSelectedCategory(category);
+    scrollToCatalog();
+  };
+
+  const handleBrandSelect = (name: string) => {
+    triggerHaptic('selection');
+    const alreadySelected = selectedBrand.toLowerCase() === name.toLowerCase();
+    setSelectedCategory('brands');
+    setSelectedBrand(alreadySelected ? 'all' : name);
+    if (!alreadySelected) scrollToCatalog();
+  };
 
   // Filter products
   const filteredProducts = products.filter((product) => {
@@ -98,38 +125,23 @@ const ShopContent: React.FC = () => {
 
           {/* Main Container */}
           <main className="max-w-6xl mx-auto px-4 sm:px-6 py-4 space-y-6">
-            {/* Elegant Boutique Banner */}
-            <div className="relative overflow-hidden rounded-3xl bg-linear-to-r from-[#2A2421] via-[#382F2B] to-[#2A2421] text-white p-5 sm:p-7 shadow-sm border border-[#443831]">
-              <div className="absolute right-0 top-0 w-64 h-64 bg-[#C9A227]/10 rounded-full blur-3xl pointer-events-none"></div>
+            {/* The page keeps exactly one h1 (slide titles are h2). */}
+            <h1 className="sr-only">Селективная косметика & нишевая парфюмерия</h1>
 
-              <div className="relative z-10 max-w-xl space-y-2.5">
-                <div className="inline-flex items-center space-x-1.5 bg-white/10 backdrop-blur-xs px-2.5 py-1 rounded-full text-[11px] font-medium text-[#E8DDD4]">
-                  <Sparkles className="w-3 h-3 text-[#C9A227]" />
-                  <span>Официальный бутик в Telegram</span>
-                </div>
+            <HeroSlider banners={siteContent.banners} ready={siteContent.ready} onCategory={handleBannerCategory} />
 
-                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white leading-tight">
-                  Селективная косметика & нишевая парфюмерия
-                </h1>
+            <ul className="flex flex-wrap gap-x-6 gap-y-1.5 text-xs text-[#6E5C51] -mt-2">
+              <li className="flex items-center space-x-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-[#6E4F3E]" />
+                <span>100% оригинал</span>
+              </li>
+              <li className="flex items-center space-x-1.5">
+                <PhoneCall className="w-3.5 h-3.5 text-[#6E4F3E]" />
+                <span>Заявка без онлайн-оплаты: мы позвоним и подтвердим заказ</span>
+              </li>
+            </ul>
 
-                <p className="text-xs sm:text-sm text-[#D3C7BD] leading-relaxed">
-                  Оригинальная продукция ведущих мировых домов красоты. Выберите товары и оставьте заявку — наш сотрудник позвонит вам и подтвердит заказ.
-                </p>
-
-                {/* Highlights bar */}
-                <div className="pt-2 flex flex-wrap gap-2 text-[11px] text-[#E8DDD4]">
-                  <span className="flex items-center space-x-1 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full">
-                    <ShieldCheck className="w-3 h-3 text-[#C9A227]" />
-                    <span>100% Оригинал</span>
-                  </span>
-                  <span className="flex items-center space-x-1 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full">
-                    <PhoneCall className="w-3 h-3 text-[#C9A227]" />
-                    <span>Заявка без онлайн-оплаты</span>
-                  </span>
-                </div>
-              </div>
-            </div>
-
+            <div id="catalog" className="scroll-mt-36 space-y-6">
             {/* Category Navigation & Search */}
             <CategoryNav />
 
@@ -137,7 +149,7 @@ const ShopContent: React.FC = () => {
             <section className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-lg sm:text-xl font-bold text-[#2A2421]">
+                  <h2 className="font-serif text-2xl sm:text-3xl font-medium tracking-[-0.01em] text-[#221D1A]">
                     {selectedCategory === 'face-care'
                       ? 'Уход за лицом'
                       : selectedCategory === 'makeup'
@@ -174,6 +186,20 @@ const ShopContent: React.FC = () => {
                   ))}
                 </div>
               )}
+            </section>
+            </div>
+
+            {/* Brand strip: names move in a seamless loop; a tap filters the catalog by brand. */}
+            <section aria-labelledby="brands-heading" className="pt-8 pb-2">
+              <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-1 mb-4">
+                <h2 id="brands-heading" className="font-serif text-3xl sm:text-4xl font-medium tracking-[-0.01em] text-[#221D1A]">
+                  Бренды
+                </h2>
+                <p className="text-xs text-[#8A796F]">Нажмите на название, чтобы увидеть товары бренда</p>
+              </div>
+              <div className="border-y border-[#E4DBD1]">
+                <BrandMarquee brands={siteContent.brands} selectedBrand={selectedBrand} onSelect={handleBrandSelect} />
+              </div>
             </section>
           </main>
         </div>

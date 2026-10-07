@@ -699,6 +699,74 @@ describe('admin: PATCH status flow', () => {
 });
 
 // ---------------------------------------------------------------------------------------------
+// Editable storefront content (hero banners, brand strip)
+// ---------------------------------------------------------------------------------------------
+describe('site content: banners and brands', () => {
+  const banner = (over: Record<string, unknown> = {}) => ({
+    id: 'b1', title: 'Уход', text: 'Текст', ctaLabel: 'Смотреть', ctaCategory: 'face-care', ctaLink: '',
+    imageUrl: 'https://images.example.com/a.jpg', active: true, ...over
+  });
+
+  it('is public to read and answers null for anything not saved yet', async () => {
+    await db.query('DELETE FROM site_content');
+    const res = await call('GET', '/api/site-content');
+    assert.equal(res.status, 200, res.text);
+    assert.deepEqual(res.json, { banners: null, brands: null });
+    assert.equal(res.headers.get('x-robots-tag'), 'noindex, nofollow');
+  });
+
+  it('rejects writes and resets without an admin session', async () => {
+    assert.equal((await call('PUT', '/api/admin/site-content/banners', { items: [banner()] })).status, 401);
+    assert.equal((await call('DELETE', '/api/admin/site-content/banners')).status, 401);
+    assert.equal((await db.query('SELECT count(*)::int n FROM site_content')).rows[0].n, 0);
+  });
+
+  it('saves, serves, updates and resets banners', async () => {
+    const saved = await admin('PUT', '/api/admin/site-content/banners', { items: [banner(), banner({ id: 'b2', title: 'Макияж', active: false })] });
+    assert.equal(saved.status, 200, saved.text);
+    const read = await call('GET', '/api/site-content');
+    assert.deepEqual(read.json.banners.map((b: any) => [b.id, b.title, b.active]), [['b1', 'Уход', true], ['b2', 'Макияж', false]]);
+    assert.equal(read.json.brands, null, 'brands are independent of banners');
+
+    await admin('PUT', '/api/admin/site-content/banners', { items: [banner({ title: 'Новый заголовок' })] });
+    assert.deepEqual((await call('GET', '/api/site-content')).json.banners.map((b: any) => b.title), ['Новый заголовок']);
+
+    assert.equal((await admin('DELETE', '/api/admin/site-content/banners')).status, 204);
+    assert.equal((await call('GET', '/api/site-content')).json.banners, null);
+  });
+
+  it('saves brands in order', async () => {
+    const items = [{ id: 'x1', name: 'Dior', logoUrl: '' }, { id: 'x2', name: 'Chanel', logoUrl: 'https://images.example.com/chanel.svg' }];
+    assert.equal((await admin('PUT', '/api/admin/site-content/brands', { items })).status, 200);
+    assert.deepEqual((await call('GET', '/api/site-content')).json.brands.map((b: any) => b.name), ['Dior', 'Chanel']);
+  });
+
+  it('validates input: unsafe URLs, empty titles, empty or oversized lists, unknown keys', async () => {
+    await db.query('DELETE FROM site_content');
+    const put = (key: string, items: unknown) => admin('PUT', `/api/admin/site-content/${key}`, { items });
+    for (const bad of [
+      banner({ ctaLink: 'javascript:alert(1)' }),
+      banner({ imageUrl: 'javascript:alert(1)' }),
+      banner({ imageUrl: 'data:text/html,x' }),
+      banner({ title: '   ' }),
+      banner({ ctaCategory: 'brands' })
+    ]) {
+      const res = await put('banners', [bad]);
+      assert.equal(res.status, 400, JSON.stringify(bad));
+      assert.equal(res.json.code, 'validation_error');
+    }
+    assert.equal((await put('banners', [])).status, 400);
+    assert.equal((await put('banners', Array.from({ length: 9 }, (_, i) => banner({ id: `b${i}` })))).status, 400);
+    assert.equal((await put('brands', [{ id: 'x', name: '', logoUrl: '' }])).status, 400);
+    assert.equal((await put('brands', [{ id: 'x', name: 'Dior', logoUrl: 'javascript:alert(1)' }])).status, 400);
+    assert.equal((await put('banners', [banner({ id: 'dup' }), banner({ id: 'dup' })])).status, 400, 'duplicate ids');
+    assert.equal((await put('brands', [{ id: 'same', name: 'A', logoUrl: '' }, { id: 'same', name: 'B', logoUrl: '' }])).status, 400, 'duplicate brand ids');
+    assert.equal((await put('unknown', [banner()])).status, 404);
+    assert.deepEqual((await call('GET', '/api/site-content')).json, { banners: null, brands: null }, 'nothing invalid was stored');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
 // Rate limiting (separate server with a tiny limit)
 // ---------------------------------------------------------------------------------------------
 describe('rate limiting', () => {

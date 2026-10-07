@@ -44,3 +44,127 @@
 .animate-scale {
   animation: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* ------------------------------------------------------------------ */
+/* Hero slider. Motion is transform/opacity only; the progress bar is  */
+/* also the autoplay clock (animationend advances the slide).          */
+/* ------------------------------------------------------------------ */
+.hero-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transform: scale(1.06);
+  z-index: 0;
+}
+.hero-img[data-state='leaving'] {
+  opacity: 1;
+  transform: scale(1);
+  z-index: 1;
+  transition: transform 1.8s cubic-bezier(0.19, 1, 0.22, 1);
+}
+.hero-img[data-state='active'] {
+  opacity: 1;
+  transform: scale(1);
+  z-index: 2;
+  transition: opacity 0.9s cubic-bezier(0.22, 1, 0.36, 1), transform 1.8s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+.hero-copy {
+  grid-area: 1 / 1;
+  align-self: center;
+  visibility: hidden;
+  pointer-events: none;
+  transition: visibility 0s linear 0.25s;
+}
+.hero-copy[data-active='true'] {
+  visibility: visible;
+  pointer-events: auto;
+  transition-delay: 0s;
+}
+.hero-reveal {
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.hero-copy[data-active='true'] .hero-reveal {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1) calc(0.3s + var(--i, 0) * 0.07s),
+    transform 0.9s cubic-bezier(0.22, 1, 0.36, 1) calc(0.3s + var(--i, 0) * 0.07s);
+}
+/* Entering copy starts 14px low; set only while the slide is not active so first paint is already at rest. */
+.hero-copy[data-active='false'] .hero-reveal {
+  transform: translateY(14px);
+}
+
+.hero-seg-fill {
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+.hero-seg[data-state='done'] .hero-seg-fill {
+  transform: scaleX(1);
+}
+.hero-seg[data-state='active'] .hero-seg-fill {
+  animation: hero-progress var(--hero-interval, 5000ms) linear forwards;
+}
+.hero-root[data-paused='true'] .hero-seg[data-state='active'] .hero-seg-fill {
+  animation-play-state: paused;
+}
+@keyframes hero-progress {
+  to { transform: scaleX(1); }
+}
+
+/* ------------------------------------------------------------------ */
+/* Brand strip: two identical copies, track moves exactly -50% so the  */
+/* loop has no seam. Duration is set from the measured width in JS.    */
+/* ------------------------------------------------------------------ */
+.marquee {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+}
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee-scroll var(--marquee-duration, 40s) linear infinite;
+}
+.marquee[data-paused='true'] .marquee-track {
+  animation-play-state: paused;
+}
+@media (hover: hover) and (pointer: fine) {
+  .marquee:hover .marquee-track {
+    animation-play-state: paused;
+  }
+}
+.marquee:focus-within .marquee-track {
+  animation-play-state: paused;
+}
+@keyframes marquee-scroll {
+  to { transform: translateX(-50%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-img,
+  .hero-img[data-state='active'],
+  .hero-img[data-state='leaving'] {
+    transform: none;
+    transition: opacity 0.4s ease;
+  }
+  .hero-copy[data-active='true'] .hero-reveal,
+  .hero-copy[data-active='false'] .hero-reveal {
+    transform: none;
+    transition: opacity 0.3s ease;
+  }
+  .hero-seg[data-state='active'] .hero-seg-fill {
+    animation: none;
+    transform: scaleX(1);
+  }
+  .hero-pause { display: none; }
+  .marquee { overflow-x: auto; scrollbar-width: none; }
+  .marquee::-webkit-scrollbar { display: none; }
+  .marquee-track { animation: none; }
+  .marquee-copy[data-clone='true'] { display: none; }
+}
