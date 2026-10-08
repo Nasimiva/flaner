@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useShop } from '../context/ShopContext';
-import { formatPrice } from '../utils/formatters';
+import { useI18n } from '../i18n/I18nContext';
 import { triggerHaptic } from '../utils/telegram';
 import { X, Star, ShoppingBag, Plus, Minus, Check, Shield, Sparkles, Droplets, Info, Heart } from 'lucide-react';
 
@@ -18,17 +18,19 @@ export const ProductDetailModal: React.FC = () => {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [activeTab, setActiveTab] = useState<'desc' | 'composition' | 'usage'>('desc');
   const [quantity, setQuantity] = useState(1);
+  const { t, formatPrice, localizeProduct } = useI18n();
 
   if (!selectedProductForDetail) return null;
 
-  const product = selectedProductForDetail;
+  // Display copy in the current language; the cart always receives the raw catalog item.
+  const product = localizeProduct(selectedProductForDetail);
   const inCartItem = cart.find((item) => item.product.id === product.id);
   const alreadyInCartCount = inCartItem ? inCartItem.quantity : 0;
   const isFavorite = favoriteIds.includes(product.id);
 
   const handleAdd = () => {
     triggerHaptic('medium');
-    addToCart(product, quantity);
+    addToCart(selectedProductForDetail, quantity);
     closeProductDetail();
   };
 
@@ -52,16 +54,16 @@ export const ProductDetailModal: React.FC = () => {
           <div className="flex items-center space-x-2">
             <button
               onClick={() => toggleFavorite(product.id)}
-              aria-label={isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'}
+              aria-label={isFavorite ? t('product.favRemove') : t('product.favAdd')}
               aria-pressed={isFavorite}
-              title={isFavorite ? 'Убрать из избранного' : 'В избранное'}
+              title={isFavorite ? t('product.favRemove') : t('product.favAddShort')}
               className="w-10 h-10 rounded-full bg-[#EFE9E2] hover:bg-[#E2D8CE] flex items-center justify-center transition-colors"
             >
               <Heart className={`w-4 h-4 ${isFavorite ? 'text-[#A64B2A] fill-[#A64B2A]' : 'text-[#4A3E37]'}`} />
             </button>
             <button
               onClick={closeProductDetail}
-              aria-label="Закрыть"
+              aria-label={t('common.close')}
               className="w-10 h-10 rounded-full bg-[#EFE9E2] hover:bg-[#E2D8CE] flex items-center justify-center text-[#4A3E37] transition-colors"
             >
               <X className="w-4 h-4" />
@@ -83,7 +85,7 @@ export const ProductDetailModal: React.FC = () => {
 
               {product.oldPrice && product.oldPrice > product.price && (
                 <div className="absolute top-3 left-3 bg-[#A64B2A] text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-sm">
-                  Скидка -{Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100)}%
+                  {t('product.discount', { n: Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100) })}
                 </div>
               )}
 
@@ -92,12 +94,12 @@ export const ProductDetailModal: React.FC = () => {
                 {product.inStock ? (
                   <>
                     <Check className="w-3 h-3 text-emerald-600" />
-                    <span>В наличии</span>
+                    <span>{t('product.inStock')}</span>
                   </>
                 ) : (
                   <>
                     <X className="w-3 h-3 text-[#A64B2A]" />
-                    <span>Нет в наличии</span>
+                    <span>{t('product.outOfStock')}</span>
                   </>
                 )}
               </div>
@@ -136,15 +138,15 @@ export const ProductDetailModal: React.FC = () => {
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-xs uppercase tracking-wider font-semibold text-[#8A796F]">
                 {product.category === 'face-care'
-                  ? 'Уход за лицом'
+                  ? t('category.face-care')
                   : product.category === 'makeup'
-                  ? 'Декоративная косметика'
-                  : 'Парфюмерия'}
+                  ? t('category.makeup')
+                  : t('category.perfume')}
               </span>
               <div className="flex items-center space-x-1 bg-[#F5EFEB] px-2 py-0.5 rounded-full text-xs">
                 <Star className="w-3.5 h-3.5 fill-[#C9A227] text-[#C9A227]" />
                 <span className="font-bold text-[#2A2421]">{product.rating}</span>
-                <span className="text-[#8A796F]">({product.reviewsCount} отзывов)</span>
+                <span className="text-[#8A796F]">{t('product.reviews', { n: product.reviewsCount })}</span>
               </div>
             </div>
 
@@ -184,7 +186,7 @@ export const ProductDetailModal: React.FC = () => {
                 }`}
               >
                 <Info className="w-3.5 h-3.5" />
-                <span>Описание</span>
+                <span>{t('product.tabDesc')}</span>
               </button>
               <button
                 onClick={() => setActiveTab('composition')}
@@ -195,7 +197,7 @@ export const ProductDetailModal: React.FC = () => {
                 }`}
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>Состав (INCI)</span>
+                <span>{t('product.tabComposition')}</span>
               </button>
               {product.howToUse && (
                 <button
@@ -207,7 +209,7 @@ export const ProductDetailModal: React.FC = () => {
                   }`}
                 >
                   <Droplets className="w-3.5 h-3.5" />
-                  <span>Применение</span>
+                  <span>{t('product.tabUsage')}</span>
                 </button>
               )}
             </div>
@@ -227,7 +229,7 @@ export const ProductDetailModal: React.FC = () => {
                   </div>
                   <p className="text-[11px] text-[#8A796F] flex items-center space-x-1">
                     <Shield className="w-3 h-3 text-emerald-600" />
-                    <span>Оригинальная сертифицированная продукция с маркировкой</span>
+                    <span>{t('product.certified')}</span>
                   </p>
                 </div>
               )}
@@ -249,7 +251,7 @@ export const ProductDetailModal: React.FC = () => {
               disabled
               className="flex-1 min-h-12 bg-[#F3EEEA] text-[#8A796F] py-3.5 px-4 rounded-2xl font-semibold text-sm border border-[#E5DDD4] cursor-not-allowed"
             >
-              Нет в наличии
+              {t('product.outOfStock')}
             </button>
           ) : (
             <>
@@ -285,7 +287,7 @@ export const ProductDetailModal: React.FC = () => {
           >
             <ShoppingBag className="w-4 h-4 text-[#E8DDD4]" />
             <span>
-              В корзину • {formatPrice(product.price * quantity, currency)}
+              {t('product.addWithTotal', { price: formatPrice(product.price * quantity, currency) })}
             </span>
           </button>
             </>
@@ -294,7 +296,7 @@ export const ProductDetailModal: React.FC = () => {
 
         {alreadyInCartCount > 0 && (
           <div className="bg-[#EFE9E2] text-[#6E5C51] text-[11px] py-1 text-center font-medium">
-            Уже в корзине: {alreadyInCartCount} шт
+            {t('product.alreadyInCart', { n: alreadyInCartCount })}
           </div>
         )}
       </div>

@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useShop } from '../context/ShopContext';
-import { formatPrice } from '../utils/formatters';
+import { useI18n } from '../i18n/I18nContext';
+import type { MessageKey } from '../i18n/ru.ts';
 import { triggerHaptic } from '../utils/telegram';
 import { normalizeUzPhone } from '../utils/phone';
 import { LeadField, LeadReceipt, LeadSubmitError } from '../utils/leadApi';
+import { localizeVolume } from '../i18n/content.ts';
 import { X, Phone, User, CheckCircle, Copy, Check, MessageSquare, AlertCircle, PhoneCall } from 'lucide-react';
 
 type FieldErrors = Partial<Record<LeadField, string>>;
@@ -13,8 +15,21 @@ const inputClass = (hasError?: string) =>
     hasError ? 'border-red-500' : 'border-[#DFD6CD]'
   }`;
 
+// Server answers are written in Russian; in other languages they are replaced by the matching translated text.
+const SERVER_CODE_MESSAGES: Record<string, MessageKey> = {
+  network: 'lead.errNetwork',
+  bad_response: 'lead.errBadResponse',
+  rate_limited: 'lead.errRateLimited',
+  product_unavailable: 'lead.errProductUnavailable',
+  out_of_stock: 'lead.errOutOfStock',
+  try_again: 'lead.errTryAgain',
+  idempotency_conflict: 'lead.errConflict',
+  internal_error: 'lead.errInternal'
+};
+
 export const LeadModal: React.FC = () => {
   const { cart, isLeadFormOpen, setIsLeadFormOpen, currency, submitLead, telegramUser } = useShop();
+  const { lang, t, formatPrice, localizeProduct } = useI18n();
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -54,12 +69,12 @@ export const LeadModal: React.FC = () => {
 
   const validate = (): FieldErrors => {
     const next: FieldErrors = {};
-    if (!firstName.trim()) next.firstName = 'Укажите имя';
-    else if (firstName.trim().length > 60) next.firstName = 'Максимум 60 символов';
-    if (!lastName.trim()) next.lastName = 'Укажите фамилию';
-    else if (lastName.trim().length > 60) next.lastName = 'Максимум 60 символов';
-    if (!normalizeUzPhone(phone)) next.phone = 'Укажите номер Узбекистана, например +998 90 123 45 67';
-    if (comment.trim().length > 500) next.comment = 'Максимум 500 символов';
+    if (!firstName.trim()) next.firstName = t('lead.errFirstName');
+    else if (firstName.trim().length > 60) next.firstName = t('lead.errMax60');
+    if (!lastName.trim()) next.lastName = t('lead.errLastName');
+    else if (lastName.trim().length > 60) next.lastName = t('lead.errMax60');
+    if (!normalizeUzPhone(phone)) next.phone = t('lead.errPhone');
+    if (comment.trim().length > 500) next.comment = t('lead.errComment');
     return next;
   };
 
@@ -75,7 +90,7 @@ export const LeadModal: React.FC = () => {
       return;
     }
     if (unavailable.length > 0) {
-      setFormError('Уберите из корзины товары, которых нет в наличии, и отправьте заявку снова.');
+      setFormError(t('lead.errUnavailable'));
       triggerHaptic('error');
       return;
     }
@@ -95,10 +110,18 @@ export const LeadModal: React.FC = () => {
     } catch (error) {
       // The cart is untouched on every failure, so the shopper can simply try again.
       if (error instanceof LeadSubmitError) {
-        setErrors(error.fieldErrors);
-        setFormError(error.message);
+        if (lang === 'ru') {
+          setErrors(error.fieldErrors);
+          setFormError(error.message);
+        } else {
+          const translated: FieldErrors = {};
+          for (const field of Object.keys(error.fieldErrors) as LeadField[]) translated[field] = t('lead.errFieldGeneric');
+          setErrors(translated);
+          const key = SERVER_CODE_MESSAGES[error.code];
+          setFormError(key ? t(key) : t('lead.errGeneric'));
+        }
       } else {
-        setFormError('Не удалось отправить заявку. Корзина сохранена, попробуйте ещё раз.');
+        setFormError(t('lead.errGeneric'));
       }
     } finally {
       setIsSubmitting(false);
@@ -121,7 +144,7 @@ export const LeadModal: React.FC = () => {
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-fade-in overflow-y-auto"
       role="dialog"
       aria-modal="true"
-      aria-label={receipt ? 'Заявка принята' : 'Оставить заявку'}
+      aria-label={receipt ? t('lead.titleDone') : t('lead.titleForm')}
     >
       <div
         className="w-full max-w-xl bg-[#FAF8F5] rounded-3xl overflow-hidden shadow-2xl border border-[#EAE3DC] my-6 animate-scale"
@@ -131,11 +154,11 @@ export const LeadModal: React.FC = () => {
         <div className="p-4 bg-white border-b border-[#EAE3DC] flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <PhoneCall className="w-5 h-5 text-[#2A2421]" />
-            <h2 className="text-base font-bold text-[#2A2421]">{receipt ? 'Заявка принята' : 'Оставить заявку'}</h2>
+            <h2 className="text-base font-bold text-[#2A2421]">{receipt ? t('lead.titleDone') : t('lead.titleForm')}</h2>
           </div>
           <button
             onClick={close}
-            aria-label="Закрыть"
+            aria-label={t('common.close')}
             className="w-10 h-10 rounded-full bg-[#EFE9E2] hover:bg-[#E2D8CE] flex items-center justify-center text-[#4A3E37] transition-colors"
           >
             <X className="w-4 h-4" />
@@ -148,49 +171,48 @@ export const LeadModal: React.FC = () => {
               <div className="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center mx-auto">
                 <CheckCircle className="w-8 h-8 text-emerald-600" />
               </div>
-              <h3 className="text-lg font-bold text-[#2A2421]">Спасибо! Мы получили вашу заявку</h3>
+              <h3 className="text-lg font-bold text-[#2A2421]">{t('lead.thanks')}</h3>
               <p className="text-xs text-[#6E5C51] leading-relaxed">
-                Сотрудник Flaner позвонит вам по номеру <strong className="text-[#2A2421]">{submittedPhone}</strong>, чтобы
-                подтвердить заявку и уточнить детали.
+                {t('lead.callBefore')}<strong className="text-[#2A2421]">{submittedPhone}</strong>{t('lead.callAfter')}
               </p>
             </div>
 
             <div className="bg-white rounded-2xl border border-[#EAE3DC] p-4 text-center space-y-1.5">
-              <span className="text-[11px] uppercase tracking-wider font-bold text-[#8A796F]">Номер вашей заявки</span>
+              <span className="text-[11px] uppercase tracking-wider font-bold text-[#8A796F]">{t('lead.numberLabel')}</span>
               <div className="flex items-center justify-center space-x-2">
                 <span className="font-mono text-xl font-bold tracking-wider text-[#2A2421]" data-testid="lead-number">
                   {receipt.leadNumber}
                 </span>
                 <button
                   onClick={copyNumber}
-                  aria-label="Скопировать номер заявки"
+                  aria-label={t('lead.copyNumber')}
                   className="w-10 h-10 rounded-lg bg-[#F5EFEB] hover:bg-[#E8DDD4] flex items-center justify-center text-[#4A3E37] transition-colors"
                 >
                   {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                 </button>
               </div>
-              <p className="text-[11px] text-[#8A796F]">Сохраните номер, чтобы назвать его менеджеру.</p>
+              <p className="text-[11px] text-[#8A796F]">{t('lead.numberHint')}</p>
               {receipt.replayed && (
                 <p className="text-[11px] text-[#5C4515] bg-[#FAF5E8] border border-[#E8DCBF] rounded-lg px-2 py-1 inline-block">
-                  Эта заявка уже была принята ранее — повторно мы её не создавали.
+                  {t('lead.replayed')}
                 </p>
               )}
             </div>
 
             {receipt.items.length > 0 && (
               <div className="bg-white rounded-2xl border border-[#EAE3DC] p-4 space-y-2">
-                <div className="text-xs font-bold uppercase tracking-wider text-[#6E5C51]">Товары в заявке</div>
+                <div className="text-xs font-bold uppercase tracking-wider text-[#6E5C51]">{t('lead.itemsInLead')}</div>
                 {receipt.items.map((item, index) => (
                   <div key={index} className="flex justify-between gap-3 text-xs text-[#2A2421]">
                     <span className="min-w-0">
                       <span className="font-semibold">{item.brand}</span> — {item.productName}
-                      {item.volume ? ` (${item.volume})` : ''} × {item.quantity}
+                      {item.volume ? ` (${localizeVolume(item.volume, lang)})` : ''} × {item.quantity}
                     </span>
                     <span className="shrink-0 font-semibold">{formatPrice(item.unitPrice * item.quantity, currency)}</span>
                   </div>
                 ))}
                 <div className="flex justify-between text-sm font-bold text-[#2A2421] pt-2 border-t border-[#F2ECE5]">
-                  <span>Итого (ориентировочно)</span>
+                  <span>{t('lead.total')}</span>
                   <span>{formatPrice(receipt.itemsTotal, currency)}</span>
                 </div>
               </div>
@@ -200,14 +222,14 @@ export const LeadModal: React.FC = () => {
               onClick={close}
               className="w-full bg-[#2A2421] hover:bg-[#3D3531] text-white py-3 rounded-2xl font-bold text-sm transition-colors"
             >
-              Продолжить покупки
+              {t('lead.continue')}
             </button>
           </div>
         ) : cart.length === 0 ? (
           <div className="p-8 text-center space-y-3">
-            <p className="text-sm text-[#6E5C51]">Корзина пуста. Добавьте товары из каталога, чтобы оставить заявку.</p>
+            <p className="text-sm text-[#6E5C51]">{t('lead.emptyCart')}</p>
             <button onClick={close} className="bg-[#2A2421] text-white text-xs font-semibold px-5 py-2.5 rounded-full">
-              Перейти в каталог
+              {t('common.toCatalog')}
             </button>
           </div>
         ) : (
@@ -216,20 +238,20 @@ export const LeadModal: React.FC = () => {
             <div className="space-y-3 bg-white p-4 rounded-2xl border border-[#EAE3DC]">
               <div className="flex items-center space-x-2 text-xs font-bold uppercase tracking-wider text-[#6E5C51]">
                 <User className="w-4 h-4 text-[#C9A227]" />
-                <span>Ваши контакты</span>
+                <span>{t('lead.contacts')}</span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label htmlFor="lead-first-name" className="text-[11px] font-medium text-[#6E5C51] block mb-1">
-                    Имя: *
+                    {t('lead.firstName')}
                   </label>
                   <input
                     id="lead-first-name"
                     type="text"
                     autoComplete="given-name"
                     maxLength={60}
-                    placeholder="Дильноза"
+                    placeholder={t('lead.firstNamePlaceholder')}
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
                     className={inputClass(errors.firstName)}
@@ -238,14 +260,14 @@ export const LeadModal: React.FC = () => {
                 </div>
                 <div>
                   <label htmlFor="lead-last-name" className="text-[11px] font-medium text-[#6E5C51] block mb-1">
-                    Фамилия: *
+                    {t('lead.lastName')}
                   </label>
                   <input
                     id="lead-last-name"
                     type="text"
                     autoComplete="family-name"
                     maxLength={60}
-                    placeholder="Каримова"
+                    placeholder={t('lead.lastNamePlaceholder')}
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
                     className={inputClass(errors.lastName)}
@@ -256,7 +278,7 @@ export const LeadModal: React.FC = () => {
 
               <div>
                 <label htmlFor="lead-phone" className="text-[11px] font-medium text-[#6E5C51] block mb-1">
-                  Номер телефона: *
+                  {t('lead.phone')}
                 </label>
                 <div className="relative">
                   <Phone className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#8A796F]" />
@@ -276,7 +298,7 @@ export const LeadModal: React.FC = () => {
 
               <div>
                 <label htmlFor="lead-comment" className="text-[11px] font-medium text-[#6E5C51] block mb-1">
-                  Комментарий (необязательно):
+                  {t('lead.comment')}
                 </label>
                 <div className="relative">
                   <MessageSquare className="w-3.5 h-3.5 absolute left-3 top-2.5 text-[#8A796F]" />
@@ -284,7 +306,7 @@ export const LeadModal: React.FC = () => {
                     id="lead-comment"
                     rows={3}
                     maxLength={500}
-                    placeholder="Например: позвоните после 18:00 или нужен другой оттенок"
+                    placeholder={t('lead.commentPlaceholder')}
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
                     className={`${inputClass(errors.comment)} pl-8 resize-none`}
@@ -313,22 +335,25 @@ export const LeadModal: React.FC = () => {
 
             {/* What is being requested */}
             <div className="bg-white p-4 rounded-2xl border border-[#EAE3DC] space-y-2">
-              <div className="text-xs font-bold uppercase tracking-wider text-[#6E5C51]">Товары из корзины</div>
-              {cart.map((item) => (
+              <div className="text-xs font-bold uppercase tracking-wider text-[#6E5C51]">{t('lead.cartItems')}</div>
+              {cart.map((line) => {
+                const item = { ...line, product: localizeProduct(line.product) };
+                return (
                 <div key={item.product.id} className="flex justify-between gap-3 text-xs text-[#2A2421]">
                   <span className="min-w-0">
                     <span className="font-semibold">{item.product.brand}</span> — {item.product.name} × {item.quantity}
-                    {!item.product.inStock && <span className="ml-1 text-red-600 font-semibold">нет в наличии</span>}
+                    {!item.product.inStock && <span className="ml-1 text-red-600 font-semibold">{t('lead.soldOut')}</span>}
                   </span>
                   <span className="shrink-0 font-semibold">{formatPrice(item.product.price * item.quantity, currency)}</span>
                 </div>
-              ))}
+                );
+              })}
               <div className="flex justify-between text-sm font-bold text-[#2A2421] pt-2 border-t border-[#F2ECE5]">
-                <span>Итого (ориентировочно)</span>
+                <span>{t('lead.total')}</span>
                 <span>{formatPrice(subtotal, currency)}</span>
               </div>
               <p className="text-[11px] text-[#8A796F] leading-relaxed">
-                Оплата не требуется. Менеджер позвонит вам, уточнит актуальные цены и наличие и подтвердит заявку.
+                {t('lead.noPaymentNote')}
               </p>
             </div>
 
@@ -344,7 +369,7 @@ export const LeadModal: React.FC = () => {
               disabled={isSubmitting}
               className="w-full bg-[#2A2421] hover:bg-[#3D3531] disabled:opacity-60 disabled:cursor-not-allowed text-white py-3.5 px-4 rounded-2xl font-bold text-sm flex items-center justify-center space-x-2 shadow-md transition-all active:scale-98"
             >
-              <span>{isSubmitting ? 'Отправляем…' : 'Отправить заявку'}</span>
+              <span>{isSubmitting ? t('lead.submitting') : t('lead.submit')}</span>
             </button>
           </form>
         )}

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ArrowRight, ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react';
 import type { Banner } from '../utils/siteContentApi';
 import { triggerHaptic } from '../utils/telegram';
+import { useI18n } from '../i18n/I18nContext';
 
 interface HeroSliderProps {
   banners: Banner[];
@@ -19,6 +20,7 @@ const CROSSFADE_MS = 1000;
 const pad = (n: number) => String(n).padStart(2, '0');
 
 export const HeroSlider: React.FC<HeroSliderProps> = ({ banners, ready, onCategory }) => {
+  const { t } = useI18n();
   const slides = banners.filter((banner) => banner.active);
   const [index, setIndex] = useState(0);
   const [prev, setPrev] = useState<number | null>(null);
@@ -114,7 +116,7 @@ export const HeroSlider: React.FC<HeroSliderProps> = ({ banners, ready, onCatego
     <section
       ref={rootRef}
       aria-roledescription="carousel"
-      aria-label="Рекламные предложения"
+      aria-label={t('hero.region')}
       data-paused={paused}
       data-testid="hero-slider"
       className="hero-root relative rounded-3xl overflow-hidden bg-[#EFE8DF] border border-[#E4DBD1] @2xl:grid @2xl:grid-cols-12 @2xl:min-h-[480px] @5xl:min-h-[520px] select-none"
@@ -166,7 +168,7 @@ export const HeroSlider: React.FC<HeroSliderProps> = ({ banners, ready, onCatego
               key={slide.id}
               role="group"
               aria-roledescription="slide"
-              aria-label={`${i + 1} из ${count}`}
+              aria-label={t('hero.slideOf', { i: i + 1, n: count })}
               aria-hidden={i !== current}
               data-active={i === current}
               className="hero-copy"
@@ -196,13 +198,13 @@ export const HeroSlider: React.FC<HeroSliderProps> = ({ banners, ready, onCatego
 
         {multiple && (
           <div className="flex items-center gap-4 px-6 pb-5 @2xl:px-8 @2xl:pb-8 @4xl:px-10 @5xl:px-12 @5xl:pb-10">
-            <div className="flex flex-1 min-w-0 items-center gap-1.5" role="group" aria-label="Выбор слайда">
+            <div className="flex flex-1 min-w-0 items-center gap-1.5" role="group" aria-label={t('hero.pickSlide')}>
               {slides.map((slide, i) => (
                 <button
                   key={slide.id}
                   type="button"
                   onClick={() => { triggerHaptic('selection'); goTo(i); }}
-                  aria-label={`Слайд ${i + 1}: ${slide.title}`}
+                  aria-label={t('hero.slideN', { i: i + 1, title: slide.title })}
                   aria-current={i === current}
                   className="hero-seg group flex-1 min-w-0 h-6 flex items-center"
                   data-state={i < current ? 'done' : i === current ? 'active' : 'next'}
@@ -223,16 +225,16 @@ export const HeroSlider: React.FC<HeroSliderProps> = ({ banners, ready, onCatego
 
             <div className="flex items-center gap-1.5">
               <RoundButton
-                label={userPaused ? 'Запустить автопрокрутку' : 'Остановить автопрокрутку'}
+                label={userPaused ? t('hero.play') : t('hero.pause')}
                 onClick={() => setUserPaused((value) => !value)}
                 className="hero-pause"
               >
                 {userPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
               </RoundButton>
-              <RoundButton label="Предыдущий слайд" onClick={() => goTo(current - 1)}>
+              <RoundButton label={t('hero.prev')} onClick={() => goTo(current - 1)}>
                 <ChevronLeft className="w-5 h-5" />
               </RoundButton>
-              <RoundButton label="Следующий слайд" onClick={() => goTo(current + 1)}>
+              <RoundButton label={t('hero.next')} onClick={() => goTo(current + 1)}>
                 <ChevronRight className="w-5 h-5" />
               </RoundButton>
             </div>

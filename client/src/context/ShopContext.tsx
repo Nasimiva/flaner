@@ -12,6 +12,7 @@ import {
 } from '../utils/cartStorage';
 import { LeadFormValues, LeadReceipt, LeadSubmitError, createIdempotencyKey, postLead } from '../utils/leadApi';
 import { normalizeUzPhone } from '../utils/phone';
+import { useI18n } from '../i18n/I18nContext';
 
 interface ShopContextType {
   products: Product[];
@@ -73,6 +74,10 @@ interface ShopContextType {
 const ShopContext = createContext<ShopContextType | undefined>(undefined);
 
 export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { t } = useI18n();
+  // Timers and listeners created in an earlier render still need the current language.
+  const tRef = useRef(t);
+  tRef.current = t;
   // Local storage initialization
   const [products, setProducts] = useState<Product[]>([]);
 
@@ -138,15 +143,15 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         // 'no-cache' always revalidates with the server (ETag), so an unchanged catalog costs a tiny 304 response.
         const response = await fetch('/api/products', { cache: 'no-cache' });
-        if (!response.ok) throw new Error('Не удалось загрузить каталог с сервера.');
+        if (!response.ok) throw new Error(tRef.current('toast.catalogLoadFailed'));
         const body = await response.text();
         let data: unknown;
         try {
           data = JSON.parse(body);
         } catch {
-          throw new Error('Сервер вернул некорректный каталог товаров.');
+          throw new Error(tRef.current('toast.catalogInvalid'));
         }
-        if (!Array.isArray(data)) throw new Error('Сервер вернул некорректный каталог товаров.');
+        if (!Array.isArray(data)) throw new Error(tRef.current('toast.catalogInvalid'));
         // An identical catalog keeps the current state, so a poll that found nothing new re-renders nothing.
         if (body !== lastCatalogBody.current) {
           lastCatalogBody.current = body;
@@ -157,7 +162,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (error: unknown) {
         console.error('Could not load product catalog:', error);
         catalogFailures.current += 1;
-        if (!options.silent) showToast(error instanceof Error ? error.message : 'Не удалось загрузить каталог.', 'error');
+        if (!options.silent) showToast(error instanceof Error ? error.message : tRef.current('toast.catalogFailedShort'), 'error');
       } finally {
         lastCatalogAttempt.current = Date.now();
         catalogRequest.current = null;
@@ -240,7 +245,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const keptLines = cartLines.filter((line) => known.has(line.productId));
     if (keptLines.length !== cartLines.length) {
       setCartLines(keptLines);
-      showToast('Некоторые товары больше недоступны и убраны из корзины', 'info');
+      showToast(t('toast.removedFromCart'), 'info');
     }
     const keptFavorites = favoriteIds.filter((id) => known.has(id));
     if (keptFavorites.length !== favoriteIds.length) setFavoriteIds(keptFavorites);
@@ -295,22 +300,22 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const addToCart = (product: Product, quantity = 1) => {
     if (!product.inStock) {
-      showToast(`«${product.name}» сейчас нет в наличии`, 'error');
+      showToast(t('toast.outOfStock', { name: product.name }), 'error');
       return;
     }
     const existing = cartLines.find((line) => line.productId === product.id);
     if (!existing && cartLines.length >= MAX_ITEMS_PER_LEAD) {
-      showToast(`В заявке может быть не больше ${MAX_ITEMS_PER_LEAD} разных товаров`, 'error');
+      showToast(t('toast.maxItems', { n: MAX_ITEMS_PER_LEAD }), 'error');
       return;
     }
     const nextQuantity = Math.min(MAX_QUANTITY_PER_ITEM, (existing?.quantity ?? 0) + quantity);
     if (existing && nextQuantity === existing.quantity) {
-      showToast(`Максимум ${MAX_QUANTITY_PER_ITEM} шт. одного товара`, 'info');
+      showToast(t('toast.maxQuantity', { n: MAX_QUANTITY_PER_ITEM }), 'info');
       return;
     }
     triggerHaptic('medium');
     setCartLines((prev) => upsertLine(prev, product.id, nextQuantity));
-    showToast(`«${product.name}» добавлен в корзину`);
+    showToast(t('toast.addedToCart', { name: product.name }));
   };
 
   const removeFromCart = (productId: string) => {
@@ -325,7 +330,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
     if (quantity > MAX_QUANTITY_PER_ITEM) {
-      showToast(`Максимум ${MAX_QUANTITY_PER_ITEM} шт. одного товара`, 'info');
+      showToast(t('toast.maxQuantity', { n: MAX_QUANTITY_PER_ITEM }), 'info');
       return;
     }
     setCartLines((prev) => upsertLine(prev, productId, quantity));
@@ -347,7 +352,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const submitLead = async (values: LeadFormValues): Promise<LeadReceipt> => {
     // Only the cart goes into a lead. Favorites are never read here.
     const items = cartLines.map((line) => ({ productId: line.productId, quantity: line.quantity }));
-    if (!items.length) throw new LeadSubmitError('Корзина пуста', 'empty_cart');
+    if (!items.length) throw new LeadSubmitError(t('toast.emptyCart'), 'empty_cart');
 
     const fingerprint = `${normalizeUzPhone(values.phone) ?? values.phone}|${cartSignature(cartLines)}`;
     if (!idempotencyRef.current || idempotencyRef.current.fingerprint !== fingerprint) {

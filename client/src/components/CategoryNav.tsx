@@ -4,19 +4,21 @@ import { CategoryId } from '../types';
 import { POPULAR_BRANDS } from '../data/initialProducts';
 import { Sparkles, Smile, Palette, Flame, Award, Search, X, ArrowUpDown } from 'lucide-react';
 import { triggerHaptic } from '../utils/telegram';
+import { useI18n } from '../i18n/I18nContext';
+import type { MessageKey } from '../i18n/ru.ts';
 
 interface CategoryConfig {
   id: CategoryId | 'all';
-  name: string;
+  nameKey: MessageKey;
   icon: React.ComponentType<{ className?: string }>;
 }
 
 const CATEGORIES: CategoryConfig[] = [
-  { id: 'all', name: 'Все товары', icon: Sparkles },
-  { id: 'face-care', name: 'Уход за лицом', icon: Smile },
-  { id: 'makeup', name: 'Декоративная косметика', icon: Palette },
-  { id: 'perfume', name: 'Парфюмерия', icon: Flame },
-  { id: 'brands', name: 'Бренды', icon: Award }
+  { id: 'all', nameKey: 'category.all', icon: Sparkles },
+  { id: 'face-care', nameKey: 'category.face-care', icon: Smile },
+  { id: 'makeup', nameKey: 'category.makeup', icon: Palette },
+  { id: 'perfume', nameKey: 'category.perfume', icon: Flame },
+  { id: 'brands', nameKey: 'category.brands', icon: Award }
 ];
 
 export const CategoryNav: React.FC = () => {
@@ -31,6 +33,7 @@ export const CategoryNav: React.FC = () => {
     sortBy,
     setSortBy
   } = useShop();
+  const { t } = useI18n();
 
   const handleCategoryClick = (catId: CategoryId | 'all') => {
     triggerHaptic('selection');
@@ -65,7 +68,7 @@ export const CategoryNav: React.FC = () => {
           <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8A796F]" />
           <input
             type="text"
-            placeholder="Поиск косметики, парфюма или бренда..."
+            placeholder={t('search.placeholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-9 pr-8 py-2.5 text-sm bg-white/90 border border-[#E0D7CE] rounded-full focus:outline-none focus:border-[#6E4F3E] focus:ring-1 focus:ring-[#6E4F3E] transition-all placeholder:text-[#A89A90] text-[#2A2421]"
@@ -73,6 +76,7 @@ export const CategoryNav: React.FC = () => {
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
+              aria-label={t('search.clear')}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8A796F] hover:text-[#2A2421] p-2.5"
             >
               <X className="w-3.5 h-3.5" />
@@ -83,16 +87,16 @@ export const CategoryNav: React.FC = () => {
         {/* Sort selector */}
         <div className="flex items-center space-x-2 bg-white/90 border border-[#E0D7CE] rounded-full px-3 py-0 min-h-10 text-xs text-[#52443C] self-end sm:self-auto w-auto">
           <ArrowUpDown className="w-3.5 h-3.5 text-[#8A796F]" />
-          <span className="text-[#8A796F] hidden xs:inline">Сортировка:</span>
+          <span className="text-[#8A796F] hidden xs:inline">{t('sort.label')}</span>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as any)}
             className="bg-transparent font-medium focus:outline-none cursor-pointer text-[#2A2421] min-h-10 py-2"
           >
-            <option value="popular">По популярности</option>
-            <option value="price-asc">Сначала дешевле</option>
-            <option value="price-desc">Сначала дороже</option>
-            <option value="rating">Высокий рейтинг</option>
+            <option value="popular">{t('sort.popular')}</option>
+            <option value="price-asc">{t('sort.priceAsc')}</option>
+            <option value="price-desc">{t('sort.priceDesc')}</option>
+            <option value="rating">{t('sort.rating')}</option>
           </select>
         </div>
       </div>
@@ -115,7 +119,7 @@ export const CategoryNav: React.FC = () => {
               }`}
             >
               <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-[#C9A227]' : 'text-[#8A796F]'}`} />
-              <span>{cat.name}</span>
+              <span>{t(cat.nameKey)}</span>
               <span
                 className={`text-[10px] px-1.5 py-0.2 rounded-full ${
                   isActive
@@ -135,14 +139,14 @@ export const CategoryNav: React.FC = () => {
         <div className="p-3 bg-[#EFE9E2]/70 rounded-2xl border border-[#DFD5CB] transition-all">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-[#6E5C51]">
-              Выберите бренд:
+              {t('brandFilter.title')}
             </span>
             {selectedBrand !== 'all' && (
               <button
                 onClick={() => setSelectedBrand('all')}
                 className="text-[11px] text-[#A64B2A] hover:underline font-medium"
               >
-                Сбросить фильтр бренда
+                {t('brandFilter.reset')}
               </button>
             )}
           </div>

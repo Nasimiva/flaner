@@ -1,4 +1,6 @@
-import { Currency } from '../types';
+import type { Currency } from '../types';
+
+type PriceLang = 'ru' | 'uz';
 
 // Exchange rates relative to base UZS
 const RATES: Record<Currency, number> = {
@@ -7,10 +9,11 @@ const RATES: Record<Currency, number> = {
   USD: 1 / 12800, // 1 USD ~ 12,800 UZS
 };
 
-export function formatPrice(amountInUzs: number, currency: Currency = 'UZS'): string {
+export function formatPrice(amountInUzs: number, currency: Currency = 'UZS', lang: PriceLang = 'ru'): string {
+  const sum = lang === 'uz' ? "so'm" : 'сум';
   if (currency === 'UZS') {
     const formatted = Math.round(amountInUzs).toLocaleString('ru-RU');
-    return `${formatted} сум`;
+    return `${formatted} ${sum}`;
   }
 
   if (currency === 'RUB') {
@@ -23,7 +26,7 @@ export function formatPrice(amountInUzs: number, currency: Currency = 'UZS'): st
     return `$${usdAmount}`;
   }
 
-  return `${amountInUzs} сум`;
+  return `${amountInUzs} ${sum}`;
 }
 
 export function formatDate(isoString: string): string {

@@ -1,5 +1,6 @@
 import React from 'react';
 import { ShopProvider, useShop } from './context/ShopContext';
+import { I18nProvider, useI18n } from './i18n/I18nContext';
 import { Header } from './components/Header';
 import { CategoryNav } from './components/CategoryNav';
 import { ProductCard } from './components/ProductCard';
@@ -14,7 +15,6 @@ import { HeroSlider } from './components/HeroSlider';
 import { BrandMarquee } from './components/BrandMarquee';
 import { useSiteContent } from './utils/useSiteContent';
 import { triggerHaptic } from './utils/telegram';
-import { formatPrice } from './utils/formatters';
 import {
   ShoppingBag,
   ArrowRight,
@@ -47,6 +47,7 @@ const ShopContent: React.FC = () => {
     selectedProductForDetail,
     toast
   } = useShop();
+  const { lang, t, formatPrice, localizeProduct, localizeBanners } = useI18n();
 
   // While a dialog is open the toast moves to the very top edge so it never covers the dialog's header or form fields.
   const dialogOpen = isCartOpen || isLeadFormOpen || isFavoritesOpen || isShareOpen || selectedProductForDetail !== null;
@@ -94,7 +95,7 @@ const ShopContent: React.FC = () => {
       const q = searchQuery.toLowerCase();
       const matchName = product.name.toLowerCase().includes(q);
       const matchBrand = product.brand.toLowerCase().includes(q);
-      const matchDesc = product.description.toLowerCase().includes(q);
+      const matchDesc = localizeProduct(product).description.toLowerCase().includes(q);
       const matchComposition = product.composition.toLowerCase().includes(q);
       if (!matchName && !matchBrand && !matchDesc && !matchComposition) return false;
     }
@@ -126,18 +127,18 @@ const ShopContent: React.FC = () => {
           {/* Main Container */}
           <main className="max-w-6xl mx-auto px-4 sm:px-6 py-4 space-y-6">
             {/* The page keeps exactly one h1 (slide titles are h2). */}
-            <h1 className="sr-only">Селективная косметика & нишевая парфюмерия</h1>
+            <h1 className="sr-only">{t('home.h1')}</h1>
 
-            <HeroSlider banners={siteContent.banners} ready={siteContent.ready} onCategory={handleBannerCategory} />
+            <HeroSlider banners={localizeBanners(siteContent.banners)} ready={siteContent.ready} onCategory={handleBannerCategory} />
 
             <ul className="flex flex-wrap gap-x-6 gap-y-1.5 text-xs text-[#6E5C51] -mt-2">
               <li className="flex items-center space-x-1.5">
                 <ShieldCheck className="w-3.5 h-3.5 text-[#6E4F3E]" />
-                <span>100% оригинал</span>
+                <span>{t('home.original')}</span>
               </li>
               <li className="flex items-center space-x-1.5">
                 <PhoneCall className="w-3.5 h-3.5 text-[#6E4F3E]" />
-                <span>Заявка без онлайн-оплаты: мы позвоним и подтвердим заказ</span>
+                <span>{t('home.noPayment')}</span>
               </li>
             </ul>
 
@@ -151,17 +152,17 @@ const ShopContent: React.FC = () => {
                 <div>
                   <h2 className="font-serif text-2xl sm:text-3xl font-medium tracking-[-0.01em] text-[#221D1A]">
                     {selectedCategory === 'face-care'
-                      ? 'Уход за лицом'
+                      ? t('category.face-care')
                       : selectedCategory === 'makeup'
-                      ? 'Декоративная косметика'
+                      ? t('category.makeup')
                       : selectedCategory === 'perfume'
-                      ? 'Парфюмерия'
+                      ? t('category.perfume')
                       : selectedCategory === 'brands'
-                      ? selectedBrand !== 'all' ? `Бренд: ${selectedBrand}` : 'Все бренды'
-                      : 'Каталог продукции'}
+                      ? selectedBrand !== 'all' ? t('catalog.brandTitle', { brand: selectedBrand }) : t('catalog.allBrands')
+                      : t('catalog.title')}
                   </h2>
                   <p className="text-xs text-[#8A796F]">
-                    Найдено: {sortedProducts.length} позиций
+                    {t('catalog.found', { n: sortedProducts.length })}
                   </p>
                 </div>
               </div>
@@ -173,10 +174,10 @@ const ShopContent: React.FC = () => {
                     <ShoppingBag className="w-8 h-8" />
                   </div>
                   <h3 className="text-base font-bold text-[#2A2421]">
-                    Товары не найдены
+                    {t('catalog.emptyTitle')}
                   </h3>
                   <p className="text-xs text-[#8A796F] max-w-sm mx-auto">
-                    К сожалению, по вашему запросу ничего не нашлось. Попробуйте сбросить фильтры или ввести другое название.
+                    {t('catalog.emptyText')}
                   </p>
                 </div>
               ) : (
@@ -193,9 +194,9 @@ const ShopContent: React.FC = () => {
             <section aria-labelledby="brands-heading" className="pt-8 pb-2">
               <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-1 mb-4">
                 <h2 id="brands-heading" className="font-serif text-3xl sm:text-4xl font-medium tracking-[-0.01em] text-[#221D1A]">
-                  Бренды
+                  {t('brands.title')}
                 </h2>
-                <p className="text-xs text-[#8A796F]">Нажмите на название, чтобы увидеть товары бренда</p>
+                <p className="text-xs text-[#8A796F]">{t('brands.hint')}</p>
               </div>
               <div className="border-y border-[#E4DBD1]">
                 <BrandMarquee brands={siteContent.brands} selectedBrand={selectedBrand} onSelect={handleBrandSelect} />
@@ -213,21 +214,21 @@ const ShopContent: React.FC = () => {
                   FLANER COSMETICS
                 </span>
                 <span className="text-[11px] text-[#8A796F]">
-                  Бутик селективной косметики и нишевой парфюмерии в Telegram (@flaneruz_bot)
+                  {t('footer.tagline')}
                 </span>
               </div>
 
               <span className="px-3 py-1.5 rounded-md bg-[#FAF5E8] text-[#5C4515] font-semibold text-[11px] border border-[#E8DCBF]">
-                Оформление по заявке — оплата не требуется
+                {t('footer.badge')}
               </span>
             </div>
 
             <div className="pt-4 border-t border-[#F2ECE5] flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-[#A89A90]">
-              <span>© {new Date().getFullYear()} flaner_cosmetics (@flaneruz_bot). Все права защищены.</span>
+              <span>{t('footer.rights', { year: new Date().getFullYear() })}</span>
               <div className="flex space-x-4">
-                <span>Узбекистан, г. Ташкент</span>
+                <span>{t('footer.city')}</span>
                 <span>•</span>
-                <span>Бот магазина: @flaneruz_bot</span>
+                <span>{t('footer.bot')}</span>
               </div>
             </div>
           </div>
@@ -244,7 +245,7 @@ const ShopContent: React.FC = () => {
                 <span className="bg-[#C9A227] text-white text-xs px-2 py-0.5 rounded-full font-bold">
                   {cartItemsCount}
                 </span>
-                <span>Корзина</span>
+                <span>{t('cartBar.cart')}</span>
               </div>
 
               <div className="flex items-center space-x-2">
@@ -294,8 +295,10 @@ const ShopContent: React.FC = () => {
 
 export default function App() {
   return (
-    <ShopProvider>
-      <ShopContent />
-    </ShopProvider>
+    <I18nProvider>
+      <ShopProvider>
+        <ShopContent />
+      </ShopProvider>
+    </I18nProvider>
   );
 }
