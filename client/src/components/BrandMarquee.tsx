@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { BrandItem } from '../utils/siteContentApi';
+import { isSameBrand } from '../utils/brands';
 
 interface BrandMarqueeProps {
   brands: BrandItem[];
@@ -52,7 +53,7 @@ export const BrandMarquee: React.FC<BrandMarqueeProps> = ({ brands, selectedBran
     >
       {Array.from({ length: repeats }).flatMap((_, round) =>
         brands.map((brand) => {
-          const selected = selectedBrand.toLowerCase() === brand.name.toLowerCase();
+          const selected = isSameBrand(selectedBrand, brand.name);
           return (
             <li key={`${round}-${brand.id}`} className="flex items-center">
               <button

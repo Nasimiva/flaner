@@ -6,6 +6,7 @@ import { Sparkles, Smile, Palette, Flame, Award, Tag, Search, X, ArrowUpDown } f
 import { triggerHaptic } from '../utils/telegram';
 import { useI18n } from '../i18n/I18nContext';
 import { categoryLabel } from '../utils/categories';
+import { isSameBrand } from '../utils/brands';
 
 interface CategoryConfig {
   id: CategoryId | 'all';
@@ -55,7 +56,7 @@ export const CategoryNav: React.FC = () => {
 
   const handleBrandClick = (brand: string) => {
     triggerHaptic('selection');
-    if (selectedBrand === brand) {
+    if (isSameBrand(selectedBrand, brand)) {
       setSelectedBrand('all');
     } else {
       setSelectedBrand(brand);
@@ -162,7 +163,7 @@ export const CategoryNav: React.FC = () => {
           </div>
           <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 no-scrollbar">
             {POPULAR_BRANDS.map((brand) => {
-              const isSelected = selectedBrand === brand;
+              const isSelected = isSameBrand(selectedBrand, brand);
               return (
                 <button
                   key={brand}

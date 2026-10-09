@@ -16,6 +16,7 @@ import { BrandMarquee } from './components/BrandMarquee';
 import { useSiteContent } from './utils/useSiteContent';
 import { triggerHaptic } from './utils/telegram';
 import { categoryLabelById } from './utils/categories';
+import { isSameBrand, matchesBrand } from './utils/brands';
 import {
   ShoppingBag,
   ArrowRight,
@@ -105,7 +106,7 @@ const ShopContent: React.FC = () => {
 
   const handleBrandSelect = (name: string) => {
     triggerHaptic('selection');
-    const alreadySelected = selectedBrand.toLowerCase() === name.toLowerCase();
+    const alreadySelected = isSameBrand(selectedBrand, name);
     setSelectedCategory('brands');
     setSelectedBrand(alreadySelected ? 'all' : name);
     if (!alreadySelected) scrollToCatalog();
@@ -119,9 +120,7 @@ const ShopContent: React.FC = () => {
     }
 
     // Brand filter
-    if (selectedBrand !== 'all') {
-      if (product.brand.toLowerCase() !== selectedBrand.toLowerCase()) return false;
-    }
+    if (!matchesBrand(product, selectedBrand)) return false;
 
     // Search query
     if (searchQuery.trim()) {
