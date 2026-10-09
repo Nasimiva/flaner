@@ -42,3 +42,13 @@ export function formatDate(isoString: string): string {
     return isoString;
   }
 }
+
+/** An old price only means something as a discount when it is higher than the current price (0 or equal = no discount). */
+export function hasOldPrice<T extends { price: number; oldPrice?: number | null }>(product: T): product is T & { oldPrice: number } {
+  return typeof product.oldPrice === 'number' && Number.isFinite(product.oldPrice) && product.oldPrice > product.price;
+}
+
+/** The value to store for a product's old price: unset unless it is higher than the price. */
+export function oldPriceToSave(price: number, oldPrice: number): number | undefined {
+  return Number.isFinite(oldPrice) && oldPrice > price ? oldPrice : undefined;
+}

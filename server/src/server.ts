@@ -10,6 +10,7 @@ import { logger } from './logger.js';
 import { createLeadRouters } from './modules/leads/leadRoutes.js';
 import { formatLeadMessage } from './modules/leads/leadNotification.js';
 import { createSiteContentRouters } from './modules/siteContent/siteContentRoutes.js';
+import { createCategoryRouters } from './modules/categories/categoryRoutes.js';
 
 dotenv.config();
 
@@ -188,6 +189,11 @@ app.use('/api/admin/leads', requireAdmin, leadRouters.adminRouter);
 const siteContentRouters = createSiteContentRouters(pool);
 app.use('/api/site-content', siteContentRouters.publicRouter);
 app.use('/api/admin/site-content', requireAdmin, siteContentRouters.adminRouter);
+
+// Product categories. Public read for the storefront, admin write.
+const categoryRouters = createCategoryRouters(pool);
+app.use('/api/categories', categoryRouters.publicRouter);
+app.use('/api/admin/categories', requireAdmin, categoryRouters.adminRouter);
 
 // Orders are persisted in PostgreSQL. The browser may submit customer details and
 // item IDs, but prices, totals, delivery fees, and payment state are server-owned.

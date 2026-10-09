@@ -1,4 +1,12 @@
-export type CategoryId = 'face-care' | 'makeup' | 'perfume' | 'brands';
+// Categories are created in the admin panel, so an id is any string ('brands' is the storefront's brand filter).
+export type CategoryId = string;
+
+export interface Category {
+  id: CategoryId;
+  name: string;
+  nameUz: string;
+  sortOrder: number;
+}
 
 export interface Product {
   id: string;

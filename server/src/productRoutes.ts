@@ -2,12 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { RequestHandler, Router } from 'express';
 import { pool } from './db/pool.js';
 
-type ProductCategory = 'face-care' | 'makeup' | 'perfume' | 'brands';
 interface ProductRecord {
   id: string;
   name: string;
   brand: string;
-  category: ProductCategory;
+  category: string;
   price: number;
   old_price: number | null;
   rating: number;
@@ -24,7 +23,6 @@ interface ProductRecord {
   is_bestseller: boolean | null;
 }
 
-const categories = new Set<ProductCategory>(['face-care', 'makeup', 'perfume', 'brands']);
 const routes = Router();
 let adminGuard: RequestHandler = (_req, _res, next) => next();
 const productWriteGuard: RequestHandler = (req, res, next) => adminGuard(req, res, next);
@@ -57,7 +55,7 @@ function validateProduct(value: unknown): string | null {
   const product = value as Record<string, unknown>;
   if (typeof product.name !== 'string' || !product.name.trim()) return 'name is required';
   if (typeof product.brand !== 'string' || !product.brand.trim()) return 'brand is required';
-  if (typeof product.category !== 'string' || !categories.has(product.category as ProductCategory)) return 'category is invalid';
+  if (typeof product.category !== 'string' || !product.category) return 'category is invalid';
   if (typeof product.price !== 'number' || !Number.isFinite(product.price) || product.price < 0) return 'price must be a non-negative number';
   if (typeof product.rating !== 'number' || !Number.isFinite(product.rating)) return 'rating must be a number';
   if (!Number.isInteger(product.reviewsCount) || Number(product.reviewsCount) < 0) return 'reviewsCount must be a non-negative integer';
@@ -74,6 +72,13 @@ function validateProduct(value: unknown): string | null {
     if (product[key] !== undefined && product[key] !== null && typeof product[key] !== 'boolean') return `${key} must be a boolean`;
   }
   return null;
+}
+
+// Categories are managed in the admin panel, so a product may only use one that exists ('brands' is the legacy storefront filter).
+async function categoryExists(category: unknown): Promise<boolean> {
+  if (category === 'brands') return true;
+  const result = await pool.query('SELECT 1 FROM categories WHERE id=$1', [category]);
+  return Boolean(result.rowCount);
 }
 
 function values(product: Record<string, unknown>) {
@@ -108,6 +113,7 @@ routes.post('/', productWriteGuard, async (req, res) => {
   if (error) return res.status(400).json({ error });
   const id = `prod-${randomUUID()}`;
   try {
+    if (!(await categoryExists(req.body.category))) return res.status(400).json({ error: 'category does not exist' });
     const result = await pool.query<ProductRecord>(
       `INSERT INTO products (id, ${columns}) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13, $14, $15, $16, $17, $18) RETURNING id, ${columns}`,
       [id, ...values(req.body)]
@@ -123,6 +129,7 @@ routes.put('/:id', productWriteGuard, async (req, res) => {
   const error = validateProduct(req.body);
   if (error) return res.status(400).json({ error });
   try {
+    if (!(await categoryExists(req.body.category))) return res.status(400).json({ error: 'category does not exist' });
     const result = await pool.query<ProductRecord>(
       `UPDATE products SET ${setters} WHERE id=$1 RETURNING id, ${columns}`,
       [req.params.id, ...values(req.body)]

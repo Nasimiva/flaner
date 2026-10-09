@@ -767,6 +767,119 @@ describe('site content: banners and brands', () => {
 });
 
 // ---------------------------------------------------------------------------------------------
+// Product categories managed from the admin panel
+// ---------------------------------------------------------------------------------------------
+describe('categories', () => {
+  const product = (category: string) => ({
+    name: 'Cat test', brand: 'B', category, price: 1000, rating: 5, reviewsCount: 0, volume: '1',
+    images: [], description: '', composition: '', howToUse: 'Наносить на кожу', inStock: true, stockCount: 1
+  });
+
+  it('serves the seeded categories publicly and rejects writes without an admin session', async () => {
+    const res = await call('GET', '/api/categories');
+    assert.equal(res.status, 200, res.text);
+    assert.deepEqual(res.json.slice(0, 3).map((c: any) => c.id), ['face-care', 'makeup', 'perfume']);
+    assert.equal((await call('POST', '/api/admin/categories', { name: 'Волосы' })).status, 401);
+  });
+
+  it('creates, renames and deletes a category, and lets a product use it', async () => {
+    const created = await admin('POST', '/api/admin/categories', { name: 'Уход за волосами', nameUz: 'Soch parvarishi' });
+    assert.equal(created.status, 201, created.text);
+    const id = created.json.id as string;
+    assert.equal((await admin('POST', '/api/admin/categories', { name: 'уход за волосами' })).status, 409, 'duplicate name');
+    assert.equal((await admin('POST', '/api/admin/categories', { name: '   ' })).status, 400, 'blank name');
+
+    const renamed = await admin('PUT', `/api/admin/categories/${id}`, { name: 'Волосы', nameUz: 'Soch' });
+    assert.equal(renamed.json.name, 'Волосы');
+
+    const saved = await admin('POST', '/api/products', product(id));
+    assert.equal(saved.status, 201, saved.text);
+    assert.equal(saved.json.category, id);
+    assert.equal(saved.json.howToUse, 'Наносить на кожу');
+    assert.equal((await admin('POST', '/api/products', product('no-such-category'))).status, 400);
+
+    const blocked = await admin('DELETE', `/api/admin/categories/${id}`);
+    assert.equal(blocked.status, 409, 'a category with products cannot be deleted');
+    assert.equal((await admin('DELETE', `/api/products/${saved.json.id}`)).status, 204);
+    assert.equal((await admin('DELETE', `/api/admin/categories/${id}`)).status, 204);
+    assert.equal((await admin('DELETE', `/api/admin/categories/${id}`)).status, 404);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Migration 005 (categories): upgrade path and re-run safety
+// ---------------------------------------------------------------------------------------------
+describe('migration 005_categories', () => {
+  const sql005 = () => fs.readFileSync(path.join(MIGRATIONS, '005_categories.sql'), 'utf8');
+  const snapshot = async (client: { query: (text: string) => Promise<{ rows: any[] }> }) =>
+    (await client.query('SELECT id, name_ru, name_uz, sort_order FROM categories ORDER BY id')).rows;
+
+  it('running the raw SQL again keeps renamed, added and used categories untouched', async () => {
+    await db.query("UPDATE categories SET name_ru = 'Лицо (правка)', name_uz = 'Yuz (tahrir)' WHERE id = 'face-care'");
+    await db.query("INSERT INTO categories (id, name_ru, sort_order) VALUES ('cat-rerun', 'Своя категория', 99)");
+    await db.query(`INSERT INTO products (id, name, brand, category, price, volume, in_stock, stock_count)
+                    VALUES ('p-rerun', 'Rerun', 'B', 'cat-rerun', 1000, '1', true, 1)`);
+    const before = await snapshot(db);
+    await db.query(sql005());
+    await db.query(sql005());
+    assert.deepEqual(await snapshot(db), before, 'categories are unchanged by a second and third run');
+    assert.equal((await db.query("SELECT category FROM products WHERE id = 'p-rerun'")).rows[0].category, 'cat-rerun');
+    assert.equal((await db.query("SELECT count(*)::int n FROM pg_constraint WHERE conrelid = 'products'::regclass AND conname = 'products_category_check'")).rows[0].n, 0);
+    await db.query("DELETE FROM products WHERE id = 'p-rerun'");
+    await db.query("DELETE FROM categories WHERE id = 'cat-rerun'");
+    await db.query("UPDATE categories SET name_ru = 'Уход за лицом', name_uz = 'Yuz parvarishi' WHERE id = 'face-care'");
+  });
+
+  it('upgrades a production-shaped 001-004 database through migrate.ts once, keeps its products, and is a no-op on re-run', async () => {
+    const name = `migrate_rerun_${process.pid}`;
+    await db.query(`CREATE DATABASE ${name} ENCODING 'UTF8' LC_COLLATE 'C' LC_CTYPE 'C' TEMPLATE template0`);
+    const url = new URL(dbUrl);
+    url.pathname = `/${name}`;
+    const scratch = new pg.Client({ connectionString: url.toString() });
+    await scratch.connect();
+    try {
+      // The state production is in today: migrations 001-004 recorded, products in the old fixed categories.
+      await scratch.query('CREATE TABLE schema_migrations (name TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())');
+      for (const file of fs.readdirSync(MIGRATIONS).filter((n) => n.endsWith('.sql') && n < '005').sort()) {
+        await scratch.query(fs.readFileSync(path.join(MIGRATIONS, file), 'utf8'));
+        await scratch.query('INSERT INTO schema_migrations (name) VALUES ($1)', [file]);
+      }
+      await scratch.query(`INSERT INTO products (id, name, brand, category, price, old_price, volume, description, composition, how_to_use, skin_type, in_stock, stock_count)
+                           VALUES ('p-old-1', 'Hair set', 'Gisou ', 'face-care', 800000, 800000, '', 'Описание', 'Состав', 'Применение', 'Для всех', true, 15),
+                                  ('p-old-2', 'Mist', 'Gisou ', 'face-care', 400000, 0, '100 мл', 'Описание 2', 'INCI', 'Применение 2', 'Для всех', true, 15)`);
+      const productsBefore = (await scratch.query('SELECT * FROM products ORDER BY id')).rows;
+
+      const migrate = () => spawnSync(process.execPath, ['--import', 'tsx', 'src/db/migrate.ts'], {
+        cwd: SERVER_DIR, encoding: 'utf8',
+        env: { ...process.env, DATABASE_URL: url.toString(), DATABASE_SSL: 'false' }
+      });
+
+      const first = migrate();
+      assert.equal(first.status, 0, first.stdout + first.stderr);
+      assert.match(first.stdout, /Applied migration 005_categories\.sql/);
+      assert.doesNotMatch(first.stdout, /Applied migration 00[1-4]/, 'only the new migration runs');
+      assert.deepEqual((await snapshot(scratch)).map((c) => c.id), ['face-care', 'makeup', 'perfume']);
+      assert.deepEqual((await scratch.query('SELECT * FROM products ORDER BY id')).rows, productsBefore, 'every product column is untouched');
+
+      // The admin edits things, then the deploy (migrate) runs again.
+      await scratch.query("UPDATE categories SET name_ru = 'Правка' WHERE id = 'makeup'");
+      await scratch.query("INSERT INTO categories (id, name_ru, sort_order) VALUES ('cat-new', 'Новая', 40)");
+      await scratch.query("UPDATE products SET category = 'cat-new' WHERE id = 'p-old-1'");
+      const categoriesAfterEdit = await snapshot(scratch);
+      const second = migrate();
+      assert.equal(second.status, 0, second.stdout + second.stderr);
+      assert.doesNotMatch(second.stdout, /Applied migration/, 'a second run applies nothing');
+      assert.deepEqual(await snapshot(scratch), categoriesAfterEdit, 'admin edits survive a re-run');
+      assert.equal((await scratch.query("SELECT category FROM products WHERE id = 'p-old-1'")).rows[0].category, 'cat-new');
+      assert.equal((await scratch.query('SELECT count(*)::int n FROM schema_migrations')).rows[0].n, 5);
+    } finally {
+      await scratch.end();
+      await db.query(`DROP DATABASE IF EXISTS ${name}`);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
 // Rate limiting (separate server with a tiny limit)
 // ---------------------------------------------------------------------------------------------
 describe('rate limiting', () => {

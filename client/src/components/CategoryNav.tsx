@@ -2,28 +2,28 @@ import React from 'react';
 import { useShop } from '../context/ShopContext';
 import { CategoryId } from '../types';
 import { POPULAR_BRANDS } from '../data/initialProducts';
-import { Sparkles, Smile, Palette, Flame, Award, Search, X, ArrowUpDown } from 'lucide-react';
+import { Sparkles, Smile, Palette, Flame, Award, Tag, Search, X, ArrowUpDown } from 'lucide-react';
 import { triggerHaptic } from '../utils/telegram';
 import { useI18n } from '../i18n/I18nContext';
-import type { MessageKey } from '../i18n/ru.ts';
+import { categoryLabel } from '../utils/categories';
 
 interface CategoryConfig {
   id: CategoryId | 'all';
-  nameKey: MessageKey;
+  label: string;
   icon: React.ComponentType<{ className?: string }>;
 }
 
-const CATEGORIES: CategoryConfig[] = [
-  { id: 'all', nameKey: 'category.all', icon: Sparkles },
-  { id: 'face-care', nameKey: 'category.face-care', icon: Smile },
-  { id: 'makeup', nameKey: 'category.makeup', icon: Palette },
-  { id: 'perfume', nameKey: 'category.perfume', icon: Flame },
-  { id: 'brands', nameKey: 'category.brands', icon: Award }
-];
+// The original categories keep their icons; categories added in the admin panel get a generic tag.
+const CATEGORY_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  'face-care': Smile,
+  makeup: Palette,
+  perfume: Flame
+};
 
 export const CategoryNav: React.FC = () => {
   const {
     products,
+    categories,
     selectedCategory,
     setSelectedCategory,
     selectedBrand,
@@ -33,7 +33,17 @@ export const CategoryNav: React.FC = () => {
     sortBy,
     setSortBy
   } = useShop();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+
+  const CATEGORIES: CategoryConfig[] = [
+    { id: 'all', label: t('category.all'), icon: Sparkles },
+    ...categories.map((category) => ({
+      id: category.id,
+      label: categoryLabel(category, lang),
+      icon: CATEGORY_ICONS[category.id] ?? Tag
+    })),
+    { id: 'brands', label: t('category.brands'), icon: Award }
+  ];
 
   const handleCategoryClick = (catId: CategoryId | 'all') => {
     triggerHaptic('selection');
@@ -119,7 +129,7 @@ export const CategoryNav: React.FC = () => {
               }`}
             >
               <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-[#C9A227]' : 'text-[#8A796F]'}`} />
-              <span>{t(cat.nameKey)}</span>
+              <span>{cat.label}</span>
               <span
                 className={`text-[10px] px-1.5 py-0.2 rounded-full ${
                   isActive

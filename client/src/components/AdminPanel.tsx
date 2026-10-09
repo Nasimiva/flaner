@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useShop } from '../context/ShopContext';
 import { Order, OrderStatus, Product, CategoryId } from '../types';
-import { formatPrice, formatDate } from '../utils/formatters';
+import { categoryLabelById } from '../utils/categories';
+import { formatPrice, formatDate, oldPriceToSave } from '../utils/formatters';
 import { triggerHaptic } from '../utils/telegram';
 import { AdminLeads } from './AdminLeads';
 import { AdminContent } from './AdminContent';
@@ -37,7 +38,9 @@ import {
   Smartphone,
   QrCode,
   Copy,
-  Share2
+  Share2,
+  Check,
+  X
 } from 'lucide-react';
 
 export const AdminPanel: React.FC = () => {
@@ -45,6 +48,10 @@ export const AdminPanel: React.FC = () => {
     orders,
     refreshOrders,
     products,
+    categories,
+    addCategory,
+    updateCategory,
+    deleteCategory,
     updateOrderStatus,
     addProduct,
     updateProduct,
@@ -123,6 +130,51 @@ export const AdminPanel: React.FC = () => {
   const [formName, setFormName] = useState('');
   const [formBrand, setFormBrand] = useState('Chanel');
   const [formCategory, setFormCategory] = useState<CategoryId>('face-care');
+
+  // Category management (products tab)
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryNameUz, setNewCategoryNameUz] = useState('');
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editCategoryName, setEditCategoryName] = useState('');
+  const [editCategoryNameUz, setEditCategoryNameUz] = useState('');
+
+  const runCategoryAction = async (action: () => Promise<void>) => {
+    try {
+      await action();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Не удалось сохранить категорию.', 'error');
+    }
+  };
+
+  const handleAddCategory = () => {
+    const name = newCategoryName.trim();
+    if (!name) {
+      showToast('Укажите название категории', 'error');
+      return;
+    }
+    void runCategoryAction(async () => {
+      await addCategory(name, newCategoryNameUz.trim());
+      setNewCategoryName('');
+      setNewCategoryNameUz('');
+    });
+  };
+
+  const handleSaveCategory = (id: string) => {
+    const name = editCategoryName.trim();
+    if (!name) {
+      showToast('Укажите название категории', 'error');
+      return;
+    }
+    void runCategoryAction(async () => {
+      await updateCategory(id, name, editCategoryNameUz.trim());
+      setEditingCategoryId(null);
+    });
+  };
+
+  const handleDeleteCategory = (id: string, name: string) => {
+    if (!window.confirm(`Удалить категорию «${name}»?`)) return;
+    void runCategoryAction(() => deleteCategory(id));
+  };
   const [formPrice, setFormPrice] = useState(350000);
   const [formOldPrice, setFormOldPrice] = useState(400000);
   const [formVolume, setFormVolume] = useState('50 мл');
@@ -265,14 +317,15 @@ export const AdminPanel: React.FC = () => {
     setEditingProduct(null);
     setFormName('');
     setFormBrand('Chanel');
-    setFormCategory('face-care');
+    setFormCategory(categories[0]?.id ?? 'face-care');
     setFormPrice(450000);
     setFormOldPrice(520000);
     setFormVolume('50 мл');
-    setFormDescription('Премиальное косметическое средство для бережного ухода и совершенного сияния.');
-    setFormComposition('Aqua, Glycerin, Niacinamide, Sodium Hyaluronate, Panthenol, Camellia Sinensis Leaf Extract, Tocopherol, Phenoxyethanol.');
-    setFormHowToUse('Наносить утром и вечером на очищенную кожу легкими массажными движениями.');
-    setFormSkinType('Для всех типов кожи');
+    // Left empty on purpose: pre-filled sample text used to be saved as the product's real composition and usage.
+    setFormDescription('');
+    setFormComposition('');
+    setFormHowToUse('');
+    setFormSkinType('');
     setFormImageUrl('https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?auto=format&fit=crop&w=800&q=80');
     setIsAddProductModalOpen(true);
   };
@@ -307,7 +360,8 @@ export const AdminPanel: React.FC = () => {
         brand: formBrand,
         category: formCategory,
         price: Number(formPrice),
-        oldPrice: Number(formOldPrice),
+        // A "old price" that is not higher than the price is not a discount: leave it unset instead of saving it.
+        oldPrice: oldPriceToSave(Number(formPrice), Number(formOldPrice)),
         volume: formVolume,
         description: formDescription,
         composition: formComposition,
@@ -321,7 +375,8 @@ export const AdminPanel: React.FC = () => {
         brand: formBrand,
         category: formCategory,
         price: Number(formPrice),
-        oldPrice: Number(formOldPrice),
+        // A "old price" that is not higher than the price is not a discount: leave it unset instead of saving it.
+        oldPrice: oldPriceToSave(Number(formPrice), Number(formOldPrice)),
         rating: 5.0,
         reviewsCount: 1,
         volume: formVolume,
@@ -771,6 +826,97 @@ export const AdminPanel: React.FC = () => {
               </button>
             </div>
 
+            {/* Categories management */}
+            <div className="bg-white p-4 rounded-2xl border border-[#EAE3DC] shadow-xs space-y-3" data-testid="admin-categories">
+              <div>
+                <h3 className="text-sm font-bold text-[#2A2421]">Категории товаров</h3>
+                <p className="text-[11px] text-[#8A796F]">Категории показываются в магазине и в форме товара. Название на узбекском необязательно.</p>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {categories.map((category) => {
+                  const count = products.filter((p) => p.category === category.id).length;
+                  return editingCategoryId === category.id ? (
+                    <div key={category.id} className="flex flex-wrap items-center gap-1.5 bg-[#FAF8F5] border border-[#2A2421] rounded-xl p-1.5">
+                      <input
+                        type="text"
+                        value={editCategoryName}
+                        onChange={(e) => setEditCategoryName(e.target.value)}
+                        placeholder="Название"
+                        maxLength={60}
+                        className="w-36 px-2 py-1 text-xs bg-white border border-[#DFD6CD] rounded-lg"
+                      />
+                      <input
+                        type="text"
+                        value={editCategoryNameUz}
+                        onChange={(e) => setEditCategoryNameUz(e.target.value)}
+                        placeholder="Nomi (uz)"
+                        maxLength={60}
+                        className="w-36 px-2 py-1 text-xs bg-white border border-[#DFD6CD] rounded-lg"
+                      />
+                      <button onClick={() => handleSaveCategory(category.id)} title="Сохранить" className="p-1.5 rounded-lg bg-[#2A2421] text-white">
+                        <Check className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => setEditingCategoryId(null)} title="Отмена" className="p-1.5 rounded-lg bg-[#F5EFEB] text-[#4A3E37]">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div key={category.id} className="flex items-center gap-1.5 bg-[#F3ECE5] text-[#2A2421] rounded-full pl-3 pr-1.5 py-1 text-xs font-medium">
+                      <span>{category.name}</span>
+                      <span className="text-[10px] text-[#7A6B62]">({count})</span>
+                      <button
+                        onClick={() => {
+                          setEditingCategoryId(category.id);
+                          setEditCategoryName(category.name);
+                          setEditCategoryNameUz(category.nameUz);
+                        }}
+                        title="Переименовать"
+                        className="p-1 rounded-full hover:bg-white/70"
+                      >
+                        <Edit2 className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteCategory(category.id, category.name)}
+                        title="Удалить категорию"
+                        className="p-1 rounded-full hover:bg-white/70 text-[#A64B2A]"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-[#F2ECE5]">
+                <input
+                  type="text"
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleAddCategory(); }}
+                  placeholder="Новая категория, например: Уход за волосами"
+                  maxLength={60}
+                  className="flex-1 px-3 py-2 text-xs bg-[#FAF8F5] border border-[#DFD6CD] rounded-xl focus:outline-none focus:border-[#2A2421]"
+                />
+                <input
+                  type="text"
+                  value={newCategoryNameUz}
+                  onChange={(e) => setNewCategoryNameUz(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleAddCategory(); }}
+                  placeholder="Nomi o'zbekcha (необязательно)"
+                  maxLength={60}
+                  className="flex-1 px-3 py-2 text-xs bg-[#FAF8F5] border border-[#DFD6CD] rounded-xl focus:outline-none focus:border-[#2A2421]"
+                />
+                <button
+                  onClick={handleAddCategory}
+                  className="bg-[#2A2421] hover:bg-[#3D3531] text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 shrink-0"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Добавить категорию</span>
+                </button>
+              </div>
+            </div>
+
             {/* Products Table/Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
               {filteredProducts.map((p) => (
@@ -801,11 +947,7 @@ export const AdminPanel: React.FC = () => {
                   {/* Stock and Category */}
                   <div className="flex items-center justify-between text-[11px] pt-2 border-t border-[#F2ECE5]">
                     <span className="bg-[#F3ECE5] text-[#5A4D44] px-2 py-0.5 rounded-full font-medium">
-                      {p.category === 'face-care'
-                        ? 'Уход за лицом'
-                        : p.category === 'makeup'
-                        ? 'Декоративная'
-                        : 'Парфюмерия'}
+                      {categoryLabelById(categories, p.category, 'ru')}
                     </span>
 
                     <button
@@ -1344,9 +1486,13 @@ export const AdminPanel: React.FC = () => {
                     onChange={(e) => setFormCategory(e.target.value as CategoryId)}
                     className="w-full px-3 py-2 bg-[#FAF8F5] border border-[#DFD6CD] rounded-xl"
                   >
-                    <option value="face-care">Уход за лицом</option>
-                    <option value="makeup">Декоративная косметика</option>
-                    <option value="perfume">Парфюмерия</option>
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.id}>{category.name}</option>
+                    ))}
+                    {/* A product whose category was removed keeps a visible option instead of silently switching. */}
+                    {!categories.some((category) => category.id === formCategory) && (
+                      <option value={formCategory}>{formCategory}</option>
+                    )}
                   </select>
                 </div>
               </div>
@@ -1412,6 +1558,32 @@ export const AdminPanel: React.FC = () => {
                   rows={2}
                   value={formDescription}
                   onChange={(e) => setFormDescription(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#FAF8F5] border border-[#DFD6CD] rounded-xl"
+                />
+              </div>
+
+              <div>
+                <label className="font-medium text-[#6E5C51] block mb-1">
+                  Применение (как использовать):
+                </label>
+                <textarea
+                  rows={2}
+                  value={formHowToUse}
+                  onChange={(e) => setFormHowToUse(e.target.value)}
+                  placeholder="Наносить утром и вечером на очищенную кожу..."
+                  className="w-full px-3 py-2 bg-[#FAF8F5] border border-[#DFD6CD] rounded-xl"
+                />
+              </div>
+
+              <div>
+                <label className="font-medium text-[#6E5C51] block mb-1">
+                  Тип кожи:
+                </label>
+                <input
+                  type="text"
+                  value={formSkinType}
+                  onChange={(e) => setFormSkinType(e.target.value)}
+                  placeholder="Для всех типов кожи"
                   className="w-full px-3 py-2 bg-[#FAF8F5] border border-[#DFD6CD] rounded-xl"
                 />
               </div>

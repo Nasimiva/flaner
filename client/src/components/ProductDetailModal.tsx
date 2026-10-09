@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useShop } from '../context/ShopContext';
 import { useI18n } from '../i18n/I18nContext';
 import { triggerHaptic } from '../utils/telegram';
+import { categoryLabelById } from '../utils/categories';
+import { hasOldPrice } from '../utils/formatters';
 import { X, Star, ShoppingBag, Plus, Minus, Check, Shield, Sparkles, Droplets, Info, Heart } from 'lucide-react';
 
 export const ProductDetailModal: React.FC = () => {
@@ -10,6 +12,7 @@ export const ProductDetailModal: React.FC = () => {
     closeProductDetail,
     addToCart,
     cart,
+    categories,
     currency,
     favoriteIds,
     toggleFavorite
@@ -18,7 +21,7 @@ export const ProductDetailModal: React.FC = () => {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [activeTab, setActiveTab] = useState<'desc' | 'composition' | 'usage'>('desc');
   const [quantity, setQuantity] = useState(1);
-  const { t, formatPrice, localizeProduct } = useI18n();
+  const { t, lang, formatPrice, localizeProduct } = useI18n();
 
   if (!selectedProductForDetail) return null;
 
@@ -83,7 +86,7 @@ export const ProductDetailModal: React.FC = () => {
                 className="w-full h-full object-cover object-center transition-all duration-300"
               />
 
-              {product.oldPrice && product.oldPrice > product.price && (
+              {hasOldPrice(product) && (
                 <div className="absolute top-3 left-3 bg-[#A64B2A] text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-sm">
                   {t('product.discount', { n: Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100) })}
                 </div>
@@ -137,11 +140,7 @@ export const ProductDetailModal: React.FC = () => {
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-xs uppercase tracking-wider font-semibold text-[#8A796F]">
-                {product.category === 'face-care'
-                  ? t('category.face-care')
-                  : product.category === 'makeup'
-                  ? t('category.makeup')
-                  : t('category.perfume')}
+                {categoryLabelById(categories, product.category, lang)}
               </span>
               <div className="flex items-center space-x-1 bg-[#F5EFEB] px-2 py-0.5 rounded-full text-xs">
                 <Star className="w-3.5 h-3.5 fill-[#C9A227] text-[#C9A227]" />
@@ -159,7 +158,7 @@ export const ProductDetailModal: React.FC = () => {
               <span className="text-2xl font-bold text-[#2A2421]">
                 {formatPrice(product.price, currency)}
               </span>
-              {product.oldPrice && (
+              {hasOldPrice(product) && (
                 <span className="text-sm text-[#A89A90] line-through">
                   {formatPrice(product.oldPrice, currency)}
                 </span>
@@ -188,17 +187,19 @@ export const ProductDetailModal: React.FC = () => {
                 <Info className="w-3.5 h-3.5" />
                 <span>{t('product.tabDesc')}</span>
               </button>
-              <button
-                onClick={() => setActiveTab('composition')}
-                className={`pb-2.5 px-3 border-b-2 transition-all flex items-center space-x-1.5 ${
-                  activeTab === 'composition'
-                    ? 'border-[#2A2421] text-[#2A2421]'
-                    : 'border-transparent text-[#8A796F] hover:text-[#2A2421]'
-                }`}
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>{t('product.tabComposition')}</span>
-              </button>
+              {product.composition.trim() && (
+                <button
+                  onClick={() => setActiveTab('composition')}
+                  className={`pb-2.5 px-3 border-b-2 transition-all flex items-center space-x-1.5 ${
+                    activeTab === 'composition'
+                      ? 'border-[#2A2421] text-[#2A2421]'
+                      : 'border-transparent text-[#8A796F] hover:text-[#2A2421]'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>{t('product.tabComposition')}</span>
+                </button>
+              )}
               {product.howToUse && (
                 <button
                   onClick={() => setActiveTab('usage')}

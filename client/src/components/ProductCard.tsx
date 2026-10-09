@@ -4,6 +4,7 @@ import { useShop } from '../context/ShopContext';
 import { Star, Plus, Minus, ShoppingBag, Eye, Heart } from 'lucide-react';
 import { triggerHaptic } from '../utils/telegram';
 import { useI18n } from '../i18n/I18nContext';
+import { hasOldPrice } from '../utils/formatters';
 
 interface ProductCardProps {
   product: Product;
@@ -75,7 +76,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product: rawProduct })
               {t('product.new')}
             </span>
           )}
-          {product.oldPrice && product.oldPrice > product.price && (
+          {hasOldPrice(product) && (
             <span className="bg-[#A64B2A]/90 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
               -{Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100)}%
             </span>
@@ -140,7 +141,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product: rawProduct })
             <span className="text-base font-bold text-[#2A2421]">
               {formatPrice(product.price, currency)}
             </span>
-            {product.oldPrice && (
+            {hasOldPrice(product) && (
               <span className="text-xs text-[#A89A90] line-through">
                 {formatPrice(product.oldPrice, currency)}
               </span>

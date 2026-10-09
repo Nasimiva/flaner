@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
-import { Product, CartItem, Order, OrderStatus, CategoryId, Currency, TelegramWebAppUser } from '../types';
+import { Product, CartItem, Order, OrderStatus, Category, CategoryId, Currency, TelegramWebAppUser } from '../types';
+import { DEFAULT_CATEGORIES } from '../utils/categories';
 import { getTelegramUser, initTelegramApp, triggerHaptic } from '../utils/telegram';
 import {
   CartLine,
@@ -16,6 +17,7 @@ import { useI18n } from '../i18n/I18nContext';
 
 interface ShopContextType {
   products: Product[];
+  categories: Category[];
   /** Cart lines joined with the live catalog (names, images and prices are never stored). */
   cart: CartItem[];
   favorites: Product[];
@@ -67,6 +69,9 @@ interface ShopContextType {
   updateProduct: (id: string, product: Partial<Product>) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
   toggleProductStock: (id: string) => Promise<void>;
+  addCategory: (name: string, nameUz: string) => Promise<void>;
+  updateCategory: (id: string, name: string, nameUz: string) => Promise<void>;
+  deleteCategory: (id: string) => Promise<void>;
   showToast: (message: string, type?: 'success' | 'info' | 'error') => void;
   resetDemoData: () => void;
 }
@@ -80,6 +85,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   tRef.current = t;
   // Local storage initialization
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>(DEFAULT_CATEGORIES);
 
   // The cart is stored as { productId, quantity } only. Names, images and prices come from the live catalog.
   const [cartLines, setCartLines] = useState<CartLine[]>(() => {
@@ -156,6 +162,14 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (body !== lastCatalogBody.current) {
           lastCatalogBody.current = body;
           setProducts(data as Product[]);
+        }
+        // Categories ride along with the catalog; if they fail the last good list (or the defaults) stays.
+        try {
+          const categoryResponse = await fetch('/api/categories', { cache: 'no-cache' });
+          const list: unknown = categoryResponse.ok ? await categoryResponse.json() : null;
+          if (Array.isArray(list) && list.length) setCategories(list as Category[]);
+        } catch (categoryError) {
+          console.warn('Could not load categories:', categoryError);
         }
         catalogFailures.current = 0;
         setCatalogLoaded(true);
@@ -456,6 +470,41 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setProducts((prev) => prev.map((item) => item.id === id ? result as Product : item));
   };
 
+  const sendCategory = async (url: string, method: 'POST' | 'PUT', name: string, nameUz: string): Promise<Category> => {
+    const response = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, nameUz })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'Не удалось сохранить категорию.');
+    return result as Category;
+  };
+
+  const addCategory = async (name: string, nameUz: string) => {
+    const created = await sendCategory('/api/admin/categories', 'POST', name, nameUz);
+    setCategories((prev) => [...prev, created]);
+    showToast('Категория добавлена!');
+  };
+
+  const updateCategory = async (id: string, name: string, nameUz: string) => {
+    const updated = await sendCategory(`/api/admin/categories/${encodeURIComponent(id)}`, 'PUT', name, nameUz);
+    setCategories((prev) => prev.map((category) => category.id === id ? updated : category));
+    showToast('Категория обновлена');
+  };
+
+  const deleteCategory = async (id: string) => {
+    triggerHaptic('warning');
+    const response = await fetch(`/api/admin/categories/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (!response.ok) {
+      const result = await response.json().catch(() => ({}));
+      throw new Error(result.error || 'Не удалось удалить категорию.');
+    }
+    setCategories((prev) => prev.filter((category) => category.id !== id));
+    if (selectedCategory === id) setSelectedCategory('all');
+    showToast('Категория удалена', 'info');
+  };
+
   const resetDemoData = () => {
     setCartLines([]);
     refreshOrders().then(
@@ -468,6 +517,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <ShopContext.Provider
       value={{
         products,
+        categories,
         cart,
         favorites,
         favoriteIds,
@@ -511,6 +561,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateProduct,
         deleteProduct,
         toggleProductStock,
+        addCategory,
+        updateCategory,
+        deleteCategory,
         showToast,
         resetDemoData
       }}

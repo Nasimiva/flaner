@@ -15,6 +15,7 @@ import { HeroSlider } from './components/HeroSlider';
 import { BrandMarquee } from './components/BrandMarquee';
 import { useSiteContent } from './utils/useSiteContent';
 import { triggerHaptic } from './utils/telegram';
+import { categoryLabelById } from './utils/categories';
 import {
   ShoppingBag,
   ArrowRight,
@@ -29,6 +30,7 @@ import {
 const ShopContent: React.FC = () => {
   const {
     products,
+    categories,
     selectedCategory,
     selectedBrand,
     setSelectedBrand,
@@ -55,8 +57,39 @@ const ShopContent: React.FC = () => {
   // Banners and brands are editable in the admin panel; reload them whenever the admin panel is closed.
   const siteContent = useSiteContent(isAdminOpen);
 
+  // Rendered in the storefront and in the admin panel, so validation and save errors are visible in both.
+  const toastView = toast && (
+    <div
+      role="status"
+      aria-live="polite"
+      className={`fixed ${dialogOpen ? 'top-2' : 'top-14'} left-1/2 -translate-x-1/2 z-[70] w-max max-w-[calc(100vw-1.5rem)] pointer-events-none animate-slide-up`}
+    >
+      <div
+        className={`px-4 py-2.5 rounded-2xl shadow-xl text-xs font-semibold flex items-center space-x-2 border ${
+          toast.type === 'error'
+            ? 'bg-rose-900 text-white border-rose-700'
+            : toast.type === 'info'
+            ? 'bg-[#2A2421] text-white border-[#443831]'
+            : 'bg-[#2A2421] text-white border-[#C9A227]/40'
+        }`}
+      >
+        {toast.type === 'error' ? (
+          <AlertCircle className="w-4 h-4 text-rose-300" />
+        ) : (
+          <CheckCircle className="w-4 h-4 text-[#C9A227]" />
+        )}
+        <span className="line-clamp-2">{toast.message}</span>
+      </div>
+    </div>
+  );
+
   if (isAdminOpen) {
-    return <AdminAccess />;
+    return (
+      <>
+        <AdminAccess />
+        {toastView}
+      </>
+    );
   }
 
   const scrollToCatalog = () => {
@@ -64,7 +97,7 @@ const ShopContent: React.FC = () => {
     document.getElementById('catalog')?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
   };
 
-  const handleBannerCategory = (category: 'all' | 'face-care' | 'makeup' | 'perfume') => {
+  const handleBannerCategory = (category: string) => {
     setSelectedBrand('all');
     setSelectedCategory(category);
     scrollToCatalog();
@@ -151,15 +184,11 @@ const ShopContent: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="font-serif text-2xl sm:text-3xl font-medium tracking-[-0.01em] text-[#221D1A]">
-                    {selectedCategory === 'face-care'
-                      ? t('category.face-care')
-                      : selectedCategory === 'makeup'
-                      ? t('category.makeup')
-                      : selectedCategory === 'perfume'
-                      ? t('category.perfume')
+                    {selectedCategory === 'all'
+                      ? t('catalog.title')
                       : selectedCategory === 'brands'
                       ? selectedBrand !== 'all' ? t('catalog.brandTitle', { brand: selectedBrand }) : t('catalog.allBrands')
-                      : t('catalog.title')}
+                      : categoryLabelById(categories, selectedCategory, lang)}
                   </h2>
                   <p className="text-xs text-[#8A796F]">
                     {t('catalog.found', { n: sortedProducts.length })}
@@ -263,31 +292,7 @@ const ShopContent: React.FC = () => {
         <FavoritesDrawer />
         <ShareModal isOpen={isShareOpen} onClose={() => setIsShareOpen(false)} />
 
-        {/* Global Toast Notification */}
-        {toast && (
-          <div
-            role="status"
-            aria-live="polite"
-            className={`fixed ${dialogOpen ? 'top-2' : 'top-14'} left-1/2 -translate-x-1/2 z-[70] w-max max-w-[calc(100vw-1.5rem)] pointer-events-none animate-slide-up`}
-          >
-            <div
-              className={`px-4 py-2.5 rounded-2xl shadow-xl text-xs font-semibold flex items-center space-x-2 border ${
-                toast.type === 'error'
-                  ? 'bg-rose-900 text-white border-rose-700'
-                  : toast.type === 'info'
-                  ? 'bg-[#2A2421] text-white border-[#443831]'
-                  : 'bg-[#2A2421] text-white border-[#C9A227]/40'
-              }`}
-            >
-              {toast.type === 'error' ? (
-                <AlertCircle className="w-4 h-4 text-rose-300" />
-              ) : (
-                <CheckCircle className="w-4 h-4 text-[#C9A227]" />
-              )}
-              <span className="line-clamp-2">{toast.message}</span>
-            </div>
-          </div>
-        )}
+        {toastView}
       </div>
     </TelegramFrame>
   );
