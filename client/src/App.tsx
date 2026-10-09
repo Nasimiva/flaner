@@ -174,6 +174,19 @@ const ShopContent: React.FC = () => {
               </li>
             </ul>
 
+            {/* Brand strip: names move in a seamless loop; a tap filters the catalog by brand. */}
+            <section aria-labelledby="brands-heading" className="pt-8 pb-2">
+              <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-1 mb-4">
+                <h2 id="brands-heading" className="font-serif text-3xl sm:text-4xl font-medium tracking-[-0.01em] text-[#221D1A]">
+                  {t('brands.title')}
+                </h2>
+                <p className="text-xs text-[#8A796F]">{t('brands.hint')}</p>
+              </div>
+              <div className="border-y border-[#E4DBD1]">
+                <BrandMarquee brands={siteContent.brands} selectedBrand={selectedBrand} onSelect={handleBrandSelect} />
+              </div>
+            </section>
+
             <div id="catalog" className="scroll-mt-36 space-y-6">
             {/* Category Navigation & Search */}
             <CategoryNav />
@@ -217,19 +230,6 @@ const ShopContent: React.FC = () => {
               )}
             </section>
             </div>
-
-            {/* Brand strip: names move in a seamless loop; a tap filters the catalog by brand. */}
-            <section aria-labelledby="brands-heading" className="pt-8 pb-2">
-              <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-1 mb-4">
-                <h2 id="brands-heading" className="font-serif text-3xl sm:text-4xl font-medium tracking-[-0.01em] text-[#221D1A]">
-                  {t('brands.title')}
-                </h2>
-                <p className="text-xs text-[#8A796F]">{t('brands.hint')}</p>
-              </div>
-              <div className="border-y border-[#E4DBD1]">
-                <BrandMarquee brands={siteContent.brands} selectedBrand={selectedBrand} onSelect={handleBrandSelect} />
-              </div>
-            </section>
           </main>
         </div>
 
