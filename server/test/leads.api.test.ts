@@ -778,7 +778,9 @@ describe('categories', () => {
   it('serves the seeded categories publicly and rejects writes without an admin session', async () => {
     const res = await call('GET', '/api/categories');
     assert.equal(res.status, 200, res.text);
-    assert.deepEqual(res.json.slice(0, 3).map((c: any) => c.id), ['face-care', 'makeup', 'perfume']);
+    const ids = res.json.map((c: any) => c.id);
+    for (const id of ['face-care', 'makeup', 'perfume', 'foundation', 'blush', 'lips', 'powder', 'other']) assert.ok(ids.includes(id), id);
+    assert.deepEqual(ids.slice(0, 3), ['foundation', 'blush', 'contour'], 'type categories come first');
     assert.equal((await call('POST', '/api/admin/categories', { name: 'Волосы' })).status, 401);
   });
 
@@ -858,7 +860,9 @@ describe('migration 005_categories', () => {
       assert.equal(first.status, 0, first.stdout + first.stderr);
       assert.match(first.stdout, /Applied migration 005_categories\.sql/);
       assert.doesNotMatch(first.stdout, /Applied migration 00[1-4]/, 'only the new migration runs');
-      assert.deepEqual((await snapshot(scratch)).map((c) => c.id), ['face-care', 'makeup', 'perfume']);
+      assert.match(first.stdout, /Applied migration 006_catalog_categories\.sql/);
+      assert.deepEqual((await snapshot(scratch)).map((c) => c.id),
+        ['blush', 'contour', 'eye-pencil', 'eyeshadow', 'face-care', 'foundation', 'highlighter', 'lips', 'makeup', 'mascara', 'other', 'perfume', 'powder', 'sets']);
       assert.deepEqual((await scratch.query('SELECT * FROM products ORDER BY id')).rows, productsBefore, 'every product column is untouched');
 
       // The admin edits things, then the deploy (migrate) runs again.
@@ -871,10 +875,43 @@ describe('migration 005_categories', () => {
       assert.doesNotMatch(second.stdout, /Applied migration/, 'a second run applies nothing');
       assert.deepEqual(await snapshot(scratch), categoriesAfterEdit, 'admin edits survive a re-run');
       assert.equal((await scratch.query("SELECT category FROM products WHERE id = 'p-old-1'")).rows[0].category, 'cat-new');
-      assert.equal((await scratch.query('SELECT count(*)::int n FROM schema_migrations')).rows[0].n, 5);
+      assert.equal((await scratch.query('SELECT count(*)::int n FROM schema_migrations')).rows[0].n, 6);
     } finally {
       await scratch.end();
       await db.query(`DROP DATABASE IF EXISTS ${name}`);
+    }
+  });
+});
+
+describe('migration 006_catalog_categories', () => {
+  const sql006 = () => fs.readFileSync(path.join(MIGRATIONS, '006_catalog_categories.sql'), 'utf8');
+
+  it('reuses the production categories, keeps products, adds no duplicates and is idempotent', async () => {
+    // Production shape: an admin-made "наборы" category with a product, an admin-made hair category, face-care renamed back.
+    await db.query("DELETE FROM categories WHERE id = 'sets'");
+    await db.query("UPDATE categories SET name_ru = 'Уход за лицом', name_uz = 'Yuz parvarishi' WHERE id = 'face-care'");
+    await db.query("INSERT INTO categories (id, name_ru, sort_order) VALUES ('cat-sets1', 'наборы', 60), ('cat-hair1', 'Уход за волосами', 40)");
+    await db.query(`INSERT INTO products (id, name, brand, category, price, volume, in_stock, stock_count)
+                    VALUES ('p-006', 'Набор', 'B', 'cat-sets1', 1000, '1', true, 0)`);
+    const productBefore = (await db.query("SELECT * FROM products WHERE id = 'p-006'")).rows;
+    await db.query(sql006());
+    const once = (await db.query('SELECT id, name_ru, name_uz, sort_order FROM categories ORDER BY id')).rows;
+    await db.query(sql006());
+    const twice = (await db.query('SELECT id, name_ru, name_uz, sort_order FROM categories ORDER BY id')).rows;
+    try {
+      assert.deepEqual(twice.map((c: any) => [c.id, c.name_ru]), once.map((c: any) => [c.id, c.name_ru]), 'a re-run changes no names');
+      const byId = Object.fromEntries(once.map((c: any) => [c.id, c]));
+      assert.equal(byId['face-care'].name_ru, 'Уход за кожей');
+      assert.equal(byId['cat-sets1'].name_ru, 'Наборы и адвент-календари');
+      assert.equal(byId.sets, undefined, 'the existing sets category is reused, not duplicated');
+      assert.equal(byId['cat-hair1'].name_ru, 'Уход за волосами', 'other admin categories are kept');
+      assert.ok(byId['cat-hair1'].sort_order > byId.other.sort_order, 'older admin categories go after the type categories');
+      assert.equal(new Set(once.map((c: any) => c.name_ru.toLowerCase())).size, once.length, 'no duplicate names');
+      assert.deepEqual((await db.query("SELECT * FROM products WHERE id = 'p-006'")).rows, productBefore, 'products are untouched');
+    } finally {
+      await db.query("DELETE FROM products WHERE id = 'p-006'");
+      await db.query("DELETE FROM categories WHERE id IN ('cat-sets1', 'cat-hair1')");
+      await db.query("INSERT INTO categories (id, name_ru, name_uz, sort_order) VALUES ('sets', 'Наборы и адвент-календари', '', 120) ON CONFLICT DO NOTHING");
     }
   });
 });

@@ -1,12 +1,11 @@
 import React from 'react';
 import { useShop } from '../context/ShopContext';
 import { CategoryId } from '../types';
-import { POPULAR_BRANDS } from '../data/initialProducts';
-import { Sparkles, Smile, Palette, Flame, Award, Tag, Search, X, ArrowUpDown } from 'lucide-react';
+import { Sparkles, Smile, Palette, Flame, Award, Tag, Search, X, ArrowUpDown, Gift, Sun, Eye, Brush, Droplet, Heart, Star, PenLine, Package } from 'lucide-react';
 import { triggerHaptic } from '../utils/telegram';
 import { useI18n } from '../i18n/I18nContext';
-import { categoryLabel } from '../utils/categories';
-import { isSameBrand } from '../utils/brands';
+import { categoryLabel, inCategory } from '../utils/categories';
+import { catalogBrands, isSameBrand } from '../utils/brands';
 
 interface CategoryConfig {
   id: CategoryId | 'all';
@@ -18,7 +17,18 @@ interface CategoryConfig {
 const CATEGORY_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   'face-care': Smile,
   makeup: Palette,
-  perfume: Flame
+  perfume: Flame,
+  foundation: Droplet,
+  blush: Heart,
+  contour: Sun,
+  highlighter: Star,
+  eyeshadow: Palette,
+  'eye-pencil': PenLine,
+  mascara: Eye,
+  lips: Brush,
+  powder: Sparkles,
+  other: Package,
+  sets: Gift
 };
 
 export const CategoryNav: React.FC = () => {
@@ -36,9 +46,13 @@ export const CategoryNav: React.FC = () => {
   } = useShop();
   const { t, lang } = useI18n();
 
+  // Get count per category
+  const getCategoryCount = (id: CategoryId | 'all') => products.filter((p) => inCategory(p, id)).length;
+
+  // Empty categories are not offered as filters (unless one is selected, e.g. from a banner).
   const CATEGORIES: CategoryConfig[] = [
     { id: 'all', label: t('category.all'), icon: Sparkles },
-    ...categories.map((category) => ({
+    ...categories.filter((category) => category.id === selectedCategory || getCategoryCount(category.id) > 0).map((category) => ({
       id: category.id,
       label: categoryLabel(category, lang),
       icon: CATEGORY_ICONS[category.id] ?? Tag
@@ -63,12 +77,8 @@ export const CategoryNav: React.FC = () => {
     }
   };
 
-  // Get count per category
-  const getCategoryCount = (id: CategoryId | 'all') => {
-    if (id === 'all') return products.length;
-    if (id === 'brands') return products.length;
-    return products.filter((p) => p.category === id).length;
-  };
+  // Brand chips come from the catalog itself, one chip per brand however it is spelled.
+  const brandChips = React.useMemo(() => catalogBrands(products), [products]);
 
   return (
     <div className="space-y-3.5 mb-6">
@@ -162,7 +172,7 @@ export const CategoryNav: React.FC = () => {
             )}
           </div>
           <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 no-scrollbar">
-            {POPULAR_BRANDS.map((brand) => {
+            {brandChips.map((brand) => {
               const isSelected = isSameBrand(selectedBrand, brand);
               return (
                 <button
