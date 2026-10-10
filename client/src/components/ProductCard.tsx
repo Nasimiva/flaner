@@ -4,7 +4,8 @@ import { useShop } from '../context/ShopContext';
 import { Star, Plus, Minus, ShoppingBag, Eye, Heart } from 'lucide-react';
 import { triggerHaptic } from '../utils/telegram';
 import { useI18n } from '../i18n/I18nContext';
-import { hasOldPrice } from '../utils/formatters';
+import { hasOldPrice, hasReviews } from '../utils/formatters';
+import { ProductImage } from './ProductImage';
 
 interface ProductCardProps {
   product: Product;
@@ -51,10 +52,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product: rawProduct })
     >
       {/* Product Image Area */}
       <div className="relative aspect-square w-full overflow-hidden bg-[#F5EFEB]">
-        <img
+        <ProductImage
           src={product.images[0]}
           alt={product.name}
-          referrerPolicy="no-referrer"
+          brand={product.brand}
           className={`w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500 ${product.inStock ? '' : 'grayscale opacity-60'}`}
           loading="lazy"
         />
@@ -116,12 +117,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product: rawProduct })
             <span className="text-[11px] font-bold uppercase tracking-wider text-[#8A796F]">
               {product.brand}
             </span>
-            <div className="flex items-center space-x-1 text-[#C9A227]">
-              <Star className="w-3 h-3 fill-[#C9A227]" />
-              <span className="text-[11px] font-semibold text-[#4A3E37]">
-                {product.rating}
-              </span>
-            </div>
+            {hasReviews(product) && (
+              <div className="flex items-center space-x-1 text-[#C9A227]" data-testid="product-rating">
+                <Star className="w-3 h-3 fill-[#C9A227]" />
+                <span className="text-[11px] font-semibold text-[#4A3E37]">
+                  {product.rating}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Product Title */}

@@ -377,8 +377,9 @@ export const AdminPanel: React.FC = () => {
         price: Number(formPrice),
         // A "old price" that is not higher than the price is not a discount: leave it unset instead of saving it.
         oldPrice: oldPriceToSave(Number(formPrice), Number(formOldPrice)),
-        rating: 5.0,
-        reviewsCount: 1,
+        // There is no review system yet: a new product starts without a rating, so the storefront shows no stars.
+        rating: 0,
+        reviewsCount: 0,
         volume: formVolume,
         images: [formImageUrl],
         description: formDescription,

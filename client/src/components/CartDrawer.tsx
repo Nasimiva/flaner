@@ -1,3 +1,4 @@
+import { ProductImage } from './ProductImage';
 import React from 'react';
 import { useShop } from '../context/ShopContext';
 import { useI18n } from '../i18n/I18nContext';
@@ -98,10 +99,11 @@ export const CartDrawer: React.FC = () => {
               >
                 {/* Thumbnail */}
                 <div className="w-16 h-16 rounded-xl overflow-hidden bg-[#F5EFEB] flex-shrink-0 border border-[#EFE9E2]">
-                  <img
+                  <ProductImage
                     src={item.product.images[0]}
                     alt={item.product.name}
-                    referrerPolicy="no-referrer"
+                    brand={item.product.brand}
+                    compact
                     className="w-full h-full object-cover"
                   />
                 </div>

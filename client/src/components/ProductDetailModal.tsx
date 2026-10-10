@@ -3,7 +3,8 @@ import { useShop } from '../context/ShopContext';
 import { useI18n } from '../i18n/I18nContext';
 import { triggerHaptic } from '../utils/telegram';
 import { categoryLabelById } from '../utils/categories';
-import { hasOldPrice } from '../utils/formatters';
+import { hasOldPrice, hasReviews } from '../utils/formatters';
+import { ProductImage } from './ProductImage';
 import { X, Star, ShoppingBag, Plus, Minus, Check, Shield, Sparkles, Droplets, Info, Heart } from 'lucide-react';
 
 export const ProductDetailModal: React.FC = () => {
@@ -79,10 +80,10 @@ export const ProductDetailModal: React.FC = () => {
           {/* Main Photo Gallery */}
           <div className="space-y-3">
             <div className="relative aspect-4/3 w-full rounded-2xl overflow-hidden bg-[#F2ECE5] border border-[#E8DFD6]">
-              <img
+              <ProductImage
                 src={product.images[activeImageIndex] || product.images[0]}
                 alt={product.name}
-                referrerPolicy="no-referrer"
+                brand={product.brand}
                 className="w-full h-full object-cover object-center transition-all duration-300"
               />
 
@@ -142,11 +143,13 @@ export const ProductDetailModal: React.FC = () => {
               <span className="text-xs uppercase tracking-wider font-semibold text-[#8A796F]">
                 {categoryLabelById(categories, product.category, lang)}
               </span>
-              <div className="flex items-center space-x-1 bg-[#F5EFEB] px-2 py-0.5 rounded-full text-xs">
-                <Star className="w-3.5 h-3.5 fill-[#C9A227] text-[#C9A227]" />
-                <span className="font-bold text-[#2A2421]">{product.rating}</span>
-                <span className="text-[#8A796F]">{t('product.reviews', { n: product.reviewsCount })}</span>
-              </div>
+              {hasReviews(product) && (
+                <div className="flex items-center space-x-1 bg-[#F5EFEB] px-2 py-0.5 rounded-full text-xs" data-testid="product-rating">
+                  <Star className="w-3.5 h-3.5 fill-[#C9A227] text-[#C9A227]" />
+                  <span className="font-bold text-[#2A2421]">{product.rating}</span>
+                  <span className="text-[#8A796F]">{t('product.reviews', { n: product.reviewsCount })}</span>
+                </div>
+              )}
             </div>
 
             <h2 className="text-xl font-bold text-[#2A2421] leading-snug">

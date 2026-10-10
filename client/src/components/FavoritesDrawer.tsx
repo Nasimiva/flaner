@@ -1,3 +1,4 @@
+import { ProductImage } from './ProductImage';
 import React from 'react';
 import { useShop } from '../context/ShopContext';
 import { useI18n } from '../i18n/I18nContext';
@@ -80,7 +81,7 @@ export const FavoritesDrawer: React.FC = () => {
                     className="w-16 h-16 rounded-xl overflow-hidden bg-[#F5EFEB] flex-shrink-0 border border-[#EFE9E2]"
                     aria-label={t('favorites.open', { name: product.name })}
                   >
-                    <img src={product.images[0]} alt={product.name} referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+                    <ProductImage src={product.images[0]} alt={product.name} brand={product.brand} compact className="w-full h-full object-cover" />
                   </button>
 
                   <div className="flex-1 min-w-0">
