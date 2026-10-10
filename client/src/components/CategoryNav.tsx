@@ -4,7 +4,7 @@ import { CategoryId } from '../types';
 import { Sparkles, Smile, Palette, Flame, Award, Tag, Search, X, ArrowUpDown, Gift, Sun, Eye, Brush, Droplet, Heart, Star, PenLine, Package } from 'lucide-react';
 import { triggerHaptic } from '../utils/telegram';
 import { useI18n } from '../i18n/I18nContext';
-import { categoryLabel, inCategory } from '../utils/categories';
+import { categoryLabel, inCategory, MAKEUP_CATEGORY } from '../utils/categories';
 import { catalogBrands, isSameBrand } from '../utils/brands';
 
 interface CategoryConfig {
@@ -49,10 +49,12 @@ export const CategoryNav: React.FC = () => {
   // Get count per category
   const getCategoryCount = (id: CategoryId | 'all') => products.filter((p) => inCategory(p, id)).length;
 
-  // Empty categories are not offered as filters (unless one is selected, e.g. from a banner).
+  // Empty categories are not offered as filters, nor is the "makeup" umbrella that only banner buttons use
+  // (each is still shown while selected, e.g. after a banner tap).
+  const offered = (id: string) => id === selectedCategory || (id !== MAKEUP_CATEGORY && getCategoryCount(id) > 0);
   const CATEGORIES: CategoryConfig[] = [
     { id: 'all', label: t('category.all'), icon: Sparkles },
-    ...categories.filter((category) => category.id === selectedCategory || getCategoryCount(category.id) > 0).map((category) => ({
+    ...categories.filter((category) => offered(category.id)).map((category) => ({
       id: category.id,
       label: categoryLabel(category, lang),
       icon: CATEGORY_ICONS[category.id] ?? Tag
