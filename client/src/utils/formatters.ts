@@ -52,3 +52,11 @@ export function hasOldPrice<T extends { price: number; oldPrice?: number | null 
 export function oldPriceToSave(price: number, oldPrice: number): number | undefined {
   return Number.isFinite(oldPrice) && oldPrice > price ? oldPrice : undefined;
 }
+
+/**
+ * The site has no customer review system, so a rating is shown only when the product carries a real review
+ * count. Products without reviews (reviewsCount 0) show no stars and no "N reviews" line.
+ */
+export function hasReviews<T extends { rating: number; reviewsCount: number }>(product: T): boolean {
+  return Number.isInteger(product.reviewsCount) && product.reviewsCount > 0 && Number.isFinite(product.rating) && product.rating > 0;
+}

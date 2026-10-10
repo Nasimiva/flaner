@@ -74,6 +74,7 @@ export const uz: Record<MessageKey, string> = {
   'product.favAddShort': 'Sevimlilarga',
   'product.discount': 'Chegirma -{n}%',
   'product.reviews': '({n} ta sharh)',
+  'product.noPhoto': "Rasm tez orada qo'shiladi",
   'product.tabDesc': 'Tavsif',
   'product.tabComposition': 'Tarkibi (INCI)',
   'product.tabUsage': "Qo'llash",

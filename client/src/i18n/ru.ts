@@ -73,6 +73,7 @@ export const ru = {
   'product.favAddShort': 'В избранное',
   'product.discount': 'Скидка -{n}%',
   'product.reviews': '({n} отзывов)',
+  'product.noPhoto': 'Фото скоро появится',
   'product.tabDesc': 'Описание',
   'product.tabComposition': 'Состав (INCI)',
   'product.tabUsage': 'Применение',
