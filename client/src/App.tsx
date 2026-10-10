@@ -15,8 +15,8 @@ import { HeroSlider } from './components/HeroSlider';
 import { BrandMarquee } from './components/BrandMarquee';
 import { useSiteContent } from './utils/useSiteContent';
 import { triggerHaptic } from './utils/telegram';
-import { categoryLabelById } from './utils/categories';
-import { isSameBrand, matchesBrand } from './utils/brands';
+import { categoryLabelById, inCategory } from './utils/categories';
+import { catalogBrands, isSameBrand, matchesBrand } from './utils/brands';
 import {
   ShoppingBag,
   ArrowRight,
@@ -57,6 +57,16 @@ const ShopContent: React.FC = () => {
 
   // Banners and brands are editable in the admin panel; reload them whenever the admin panel is closed.
   const siteContent = useSiteContent(isAdminOpen);
+
+  // The carousel shows the brands chosen in the admin panel first, then every other brand of the catalog, so each
+  // product can be reached from it. Spelling variants of one brand appear once.
+  const marqueeBrands = React.useMemo(() => {
+    const listed = siteContent.brands;
+    const extra = catalogBrands(products)
+      .filter((name) => !listed.some((brand) => isSameBrand(brand.name, name) || matchesBrand({ brand: name }, brand.name)))
+      .map((name) => ({ id: `catalog-${name}`, name, logoUrl: '' }));
+    return [...listed, ...extra];
+  }, [siteContent.brands, products]);
 
   // Rendered in the storefront and in the admin panel, so validation and save errors are visible in both.
   const toastView = toast && (
@@ -115,9 +125,7 @@ const ShopContent: React.FC = () => {
   // Filter products
   const filteredProducts = products.filter((product) => {
     // Category filter
-    if (selectedCategory !== 'all' && selectedCategory !== 'brands') {
-      if (product.category !== selectedCategory) return false;
-    }
+    if (!inCategory(product, selectedCategory)) return false;
 
     // Brand filter
     if (!matchesBrand(product, selectedBrand)) return false;
@@ -183,7 +191,7 @@ const ShopContent: React.FC = () => {
                 <p className="text-xs text-[#8A796F]">{t('brands.hint')}</p>
               </div>
               <div className="border-y border-[#E4DBD1]">
-                <BrandMarquee brands={siteContent.brands} selectedBrand={selectedBrand} onSelect={handleBrandSelect} />
+                <BrandMarquee brands={marqueeBrands} selectedBrand={selectedBrand} onSelect={handleBrandSelect} />
               </div>
             </section>
 

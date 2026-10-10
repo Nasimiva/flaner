@@ -16,3 +16,19 @@ export function categoryLabelById(categories: Category[], id: string, lang: 'ru'
   const found = categories.find((category) => category.id === id);
   return found ? categoryLabel(found, lang) : id;
 }
+
+/**
+ * Category ids of the decorative-cosmetics categories (migration 006). The old umbrella category "makeup" is kept
+ * for banner buttons and older clients: choosing it shows every decorative product.
+ */
+export const MAKEUP_CATEGORY = 'makeup';
+export const MAKEUP_GROUP: readonly string[] = [
+  MAKEUP_CATEGORY, 'foundation', 'blush', 'contour', 'highlighter', 'eyeshadow', 'eye-pencil', 'mascara', 'lips', 'powder'
+];
+
+/** True when the product is shown under the given catalog filter ('all' and 'brands' show everything). */
+export function inCategory(product: { category: string }, selected: string): boolean {
+  if (selected === 'all' || selected === 'brands') return true;
+  if (selected === MAKEUP_CATEGORY) return MAKEUP_GROUP.includes(product.category);
+  return product.category === selected;
+}
