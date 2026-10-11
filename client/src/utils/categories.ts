@@ -32,3 +32,32 @@ export function inCategory(product: { category: string }, selected: string): boo
   if (selected === MAKEUP_CATEGORY) return MAKEUP_GROUP.includes(product.category);
   return product.category === selected;
 }
+
+/**
+ * The catalog filter a banner button should apply. The banner stores a category id chosen in the admin panel; if that
+ * category has since been deleted (or is not a category at all) the button opens the whole catalog instead of an empty page.
+ */
+export function resolveBannerCategory(
+  banner: string,
+  categories: Pick<Category, 'id'>[],
+  products: { category: string }[]
+): string {
+  if (banner === 'all') return 'all';
+  const exists = categories.some((category) => category.id === banner) || products.some((product) => product.category === banner);
+  return exists ? banner : 'all';
+}
+
+/**
+ * Choices for the banner button in the admin panel: the whole catalog plus every category that exists now (same list
+ * and order as the storefront). A value that is no longer a category stays visible so it is not silently replaced.
+ */
+export function bannerCategoryOptions(categories: Category[], current: string): { value: string; label: string }[] {
+  const options = [
+    { value: 'all', label: 'Весь каталог' },
+    ...categories.map((category) => ({ value: category.id, label: category.name }))
+  ];
+  if (!options.some((option) => option.value === current)) {
+    options.push({ value: current, label: 'Категория удалена (кнопка откроет весь каталог)' });
+  }
+  return options;
+}

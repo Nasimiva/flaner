@@ -15,7 +15,8 @@ export const bannerSchema = z.object({
   title: z.string().trim().min(1, 'Укажите заголовок').max(80),
   text: z.string().trim().max(220),
   ctaLabel: z.string().trim().max(30),
-  ctaCategory: z.enum(['all', 'face-care', 'makeup', 'perfume']),
+  // 'all' or the id of a catalog category. Existence is checked against the categories table when saving (assertCategoriesExist).
+  ctaCategory: z.string().trim().min(1).max(40),
   ctaLink: optionalWebUrl,
   imageUrl: webUrl,
   active: z.boolean()
@@ -34,6 +35,16 @@ const bodySchemas = {
   banners: z.object({ items: z.array(bannerSchema).min(1).max(8).refine(uniqueIds, 'id элементов должны быть уникальными') }),
   brands: z.object({ items: z.array(brandSchema).min(1).max(30).refine(uniqueIds, 'id элементов должны быть уникальными') })
 } satisfies Record<ContentKey, z.ZodType>;
+
+/** A banner button may only open "all" or a category that exists in the catalog right now. */
+async function assertCategoriesExist(pool: Pool, items: z.infer<typeof bannerSchema>[]) {
+  const wanted = [...new Set(items.map((item) => item.ctaCategory).filter((id) => id !== 'all'))];
+  if (!wanted.length) return;
+  const { rows } = await pool.query<{ id: string }>('SELECT id FROM categories WHERE id = ANY($1::text[])', [wanted]);
+  const known = new Set(rows.map((row) => row.id));
+  const missing = wanted.find((id) => !known.has(id));
+  if (missing) throw new HttpError(400, 'unknown_category', 'Выбранной категории каталога не существует. Обновите страницу и выберите категорию заново.', { category: missing });
+}
 
 function parseKey(value: unknown): ContentKey {
   if (typeof value === 'string' && (CONTENT_KEYS as readonly string[]).includes(value)) return value as ContentKey;
@@ -55,6 +66,7 @@ export function createSiteContentRouters(pool: Pool) {
   adminRouter.put('/:key', asyncHandler(async (req, res) => {
     const key = parseKey(req.params.key);
     const { items } = bodySchemas[key].parse(req.body);
+    if (key === 'banners') await assertCategoriesExist(pool, items as z.infer<typeof bannerSchema>[]);
     await pool.query(
       `INSERT INTO site_content (key, value) VALUES ($1, $2::jsonb)
        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,

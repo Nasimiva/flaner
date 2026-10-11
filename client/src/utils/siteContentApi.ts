@@ -2,8 +2,9 @@
 // Free of React and of imports so Node can unit-test it directly. The shop never depends on it:
 // any failure or missing value falls back to the defaults in data/siteContentDefaults.ts.
 
-export type BannerCategory = 'all' | 'face-care' | 'makeup' | 'perfume';
-export const BANNER_CATEGORIES: readonly BannerCategory[] = ['all', 'face-care', 'makeup', 'perfume'];
+/** 'all' (whole catalog) or the id of a catalog category. The categories themselves come from /api/categories. */
+export type BannerCategory = string;
+export const ALL_CATEGORIES = 'all';
 
 export interface Banner {
   id: string;
@@ -43,6 +44,13 @@ const uniqueId = (raw: unknown, fallback: string, seen: Set<string>) => {
   return id;
 };
 
+// Category ids are slugs ('face-care', 'cat-5974ed1e'). 'brands' is the storefront's brand filter, not a category.
+const CATEGORY_ID = /^[A-Za-z0-9_-]{1,40}$/;
+export function normalizeBannerCategory(value: unknown): BannerCategory {
+  const id = str(value).trim();
+  return CATEGORY_ID.test(id) && id !== 'brands' ? id : ALL_CATEGORIES;
+}
+
 /** Keeps only well-formed banners. Returns null when nothing usable came back, so the caller uses defaults. */
 export function normalizeBanners(value: unknown): Banner[] | null {
   if (!Array.isArray(value)) return null;
@@ -53,7 +61,7 @@ export function normalizeBanners(value: unknown): Banner[] | null {
     const title = str(raw.title).trim();
     const imageUrl = safeUrl(raw.imageUrl);
     if (!title || !imageUrl) continue;
-    const category = BANNER_CATEGORIES.find((c) => c === raw.ctaCategory) ?? 'all';
+    const category = normalizeBannerCategory(raw.ctaCategory);
     banners.push({
       id: uniqueId(raw.id, `banner-${banners.length}`, seen),
       title,

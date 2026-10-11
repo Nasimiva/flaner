@@ -35,10 +35,21 @@ describe('normalizeBanners', () => {
     assert.deepEqual(result?.map((b) => b.id), ['ok-1', 'ok-2']);
   });
 
-  it('never lets an unsafe link or unknown category through', () => {
-    const [result] = normalizeBanners([banner({ ctaLink: 'javascript:alert(1)', ctaCategory: 'nope' })])!;
+  it('never lets an unsafe link or a malformed category through', () => {
+    const [result] = normalizeBanners([banner({ ctaLink: 'javascript:alert(1)', ctaCategory: '<script>' })])!;
     assert.equal(result.ctaLink, '');
     assert.equal(result.ctaCategory, 'all');
+    for (const bad of ['brands', '', '   ', 'a b', 'x'.repeat(41), 7, null, undefined]) {
+      assert.equal(normalizeBanners([banner({ ctaCategory: bad })])![0].ctaCategory, 'all', String(bad));
+    }
+  });
+
+  // Regression: the button used to be limited to all / face-care / makeup / perfume, so every other catalog category
+  // (Контуринг, Румяна, ...) was reset to "Весь каталог" on read.
+  it('keeps the id of any real catalog category', () => {
+    const ids = ['all', 'face-care', 'contour', 'blush', 'eye-pencil', 'cat-5974ed1e'];
+    const result = normalizeBanners(ids.map((id, i) => banner({ id: `b${i}`, ctaCategory: id })))!;
+    assert.deepEqual(result.map((b) => b.ctaCategory), ids);
   });
 
   it('treats a missing active flag as shown and only an explicit false as hidden', () => {

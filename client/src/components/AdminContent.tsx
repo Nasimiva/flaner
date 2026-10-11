@@ -1,25 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowDown, ArrowUp, Plus, RotateCcw, Save, Trash2 } from 'lucide-react';
+import { useShop } from '../context/ShopContext';
+import { bannerCategoryOptions } from '../utils/categories';
 import { DEFAULT_BANNERS, DEFAULT_BRANDS } from '../data/siteContentDefaults';
 import {
   fetchSiteContent,
   resetSiteContent,
   saveSiteContent,
   type Banner,
-  type BannerCategory,
   type BrandItem,
   type ContentKey
 } from '../utils/siteContentApi';
 
 const MAX_BANNERS = 8;
 const MAX_BRANDS = 30;
-
-const CATEGORY_LABELS: Record<BannerCategory, string> = {
-  all: 'Весь каталог',
-  'face-care': 'Уход за лицом',
-  makeup: 'Декоративная косметика',
-  perfume: 'Парфюмерия'
-};
 
 const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 const isWebUrl = (value: string) => /^(https?:\/\/\S+|\/\S*)$/.test(value.trim());
@@ -66,6 +60,8 @@ const StatusLine: React.FC<{ state: SaveState }> = ({ state }) => {
 };
 
 export const AdminContent: React.FC = () => {
+  // The same live category list the storefront catalog uses, so the button can open any existing category.
+  const { categories } = useShop();
   const [banners, setBanners] = useState<Banner[]>(DEFAULT_BANNERS);
   const [brands, setBrands] = useState<BrandItem[]>(DEFAULT_BRANDS);
   const [loaded, setLoaded] = useState(false);
@@ -198,8 +194,8 @@ export const AdminContent: React.FC = () => {
                 </div>
                 <div>
                   <label className={labelClass} htmlFor={`b-cat-${banner.id}`}>Кнопка открывает раздел каталога</label>
-                  <select id={`b-cat-${banner.id}`} className={inputClass} value={banner.ctaCategory} disabled={Boolean(banner.ctaLink.trim())} onChange={(e) => patchBanner(banner.id, { ctaCategory: e.target.value as BannerCategory })}>
-                    {Object.entries(CATEGORY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  <select id={`b-cat-${banner.id}`} className={inputClass} value={banner.ctaCategory} disabled={Boolean(banner.ctaLink.trim())} onChange={(e) => patchBanner(banner.id, { ctaCategory: e.target.value })}>
+                    {bannerCategoryOptions(categories, banner.ctaCategory).map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
                   </select>
                 </div>
                 <div className="sm:col-span-2">

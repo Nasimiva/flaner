@@ -735,6 +735,24 @@ describe('site content: banners and brands', () => {
     assert.equal((await call('GET', '/api/site-content')).json.banners, null);
   });
 
+  // Regression: the banner button could only open face-care / makeup / perfume, never the other catalog categories.
+  it('lets a banner button open any category that exists in the catalog, including admin-made ones', async () => {
+    const created = await admin('POST', '/api/admin/categories', { name: 'Категория для баннера', nameUz: 'Banner uchun' });
+    assert.equal(created.status, 201, created.text);
+    const customId = created.json.id as string;
+    const ids = ['all', 'contour', 'blush', 'face-care', 'makeup', customId];
+    const saved = await admin('PUT', '/api/admin/site-content/banners', { items: ids.map((id, i) => banner({ id: `cat-b${i}`, ctaCategory: id })) });
+    assert.equal(saved.status, 200, saved.text);
+    assert.deepEqual((await call('GET', '/api/site-content')).json.banners.map((b: any) => b.ctaCategory), ids);
+
+    // A category that was deleted afterwards can no longer be saved, the admin must pick a current one.
+    await db.query('DELETE FROM categories WHERE id = $1', [customId]);
+    const stale = await admin('PUT', '/api/admin/site-content/banners', { items: [banner({ ctaCategory: customId })] });
+    assert.equal(stale.status, 400);
+    assert.equal(stale.json.code, 'unknown_category');
+    await db.query('DELETE FROM site_content');
+  });
+
   it('saves brands in order', async () => {
     const items = [{ id: 'x1', name: 'Dior', logoUrl: '' }, { id: 'x2', name: 'Chanel', logoUrl: 'https://images.example.com/chanel.svg' }];
     assert.equal((await admin('PUT', '/api/admin/site-content/brands', { items })).status, 200);
@@ -749,7 +767,7 @@ describe('site content: banners and brands', () => {
       banner({ imageUrl: 'javascript:alert(1)' }),
       banner({ imageUrl: 'data:text/html,x' }),
       banner({ title: '   ' }),
-      banner({ ctaCategory: 'brands' })
+      banner({ ctaCategory: '   ' })
     ]) {
       const res = await put('banners', [bad]);
       assert.equal(res.status, 400, JSON.stringify(bad));
@@ -762,6 +780,11 @@ describe('site content: banners and brands', () => {
     assert.equal((await put('banners', [banner({ id: 'dup' }), banner({ id: 'dup' })])).status, 400, 'duplicate ids');
     assert.equal((await put('brands', [{ id: 'same', name: 'A', logoUrl: '' }, { id: 'same', name: 'B', logoUrl: '' }])).status, 400, 'duplicate brand ids');
     assert.equal((await put('unknown', [banner()])).status, 404);
+    for (const unknownCategory of ['brands', 'no-such-category']) {
+      const res = await put('banners', [banner({ ctaCategory: unknownCategory })]);
+      assert.equal(res.status, 400, unknownCategory);
+      assert.equal(res.json.code, 'unknown_category');
+    }
     assert.deepEqual((await call('GET', '/api/site-content')).json, { banners: null, brands: null }, 'nothing invalid was stored');
   });
 });

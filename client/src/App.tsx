@@ -15,7 +15,7 @@ import { HeroSlider } from './components/HeroSlider';
 import { BrandMarquee } from './components/BrandMarquee';
 import { useSiteContent } from './utils/useSiteContent';
 import { triggerHaptic } from './utils/telegram';
-import { categoryLabelById, inCategory } from './utils/categories';
+import { categoryLabelById, inCategory, resolveBannerCategory } from './utils/categories';
 import { catalogBrands, isSameBrand, matchesBrand } from './utils/brands';
 import {
   ShoppingBag,
@@ -110,7 +110,7 @@ const ShopContent: React.FC = () => {
 
   const handleBannerCategory = (category: string) => {
     setSelectedBrand('all');
-    setSelectedCategory(category);
+    setSelectedCategory(resolveBannerCategory(category, categories, products));
     scrollToCatalog();
   };
 
