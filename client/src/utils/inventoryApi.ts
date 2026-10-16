@@ -2,7 +2,7 @@
 // They need the admin session cookie, which the browser sends automatically for same-origin requests.
 // Nothing here is ever requested by the storefront. Free of React so it can be unit-tested directly by Node.
 
-import { request } from './adminLeadsApi.ts';
+import { AdminApiError, request } from './adminLeadsApi.ts';
 
 type FetchLike = typeof fetch;
 
@@ -195,3 +195,32 @@ export function parseAmount(raw: string): number | undefined {
   const value = Number(text);
   return Number.isFinite(value) ? value : NaN;
 }
+
+// ---- reset ("Обнулить склад") ---------------------------------------------------------------
+
+export const RESET_CONFIRM_WORD = 'ОБНУЛИТЬ';
+
+/** The confirmation counts only when the exact word is typed (spaces around it are ignored). */
+export const isResetConfirmed = (typed: string): boolean => typed.trim() === RESET_CONFIRM_WORD;
+
+export const BACKUP_FILES = [
+  { url: `${BASE}/stock.csv`, filename: 'stock-backup.csv' },
+  { url: `${BASE}/movements.csv`, filename: 'movements-backup.csv' }
+] as const;
+
+/** Fetches one CSV backup as a Blob. Throws (so the reset never starts) if it cannot be downloaded. */
+export async function fetchBackup(url: string, fetchImpl: FetchLike = fetch): Promise<Blob> {
+  let response: Response;
+  try {
+    response = await fetchImpl(url);
+  } catch {
+    throw new AdminApiError('Нет связи с сервером. Резервная копия не скачана, склад не тронут.', 'network');
+  }
+  if (response.status === 401) throw new AdminApiError('Сессия администратора истекла. Войдите заново.', 'unauthorized', 401);
+  if (!response.ok) throw new AdminApiError(`Не удалось скачать резервную копию (${response.status}). Склад не тронут.`, 'backup_failed', response.status);
+  return response.blob();
+}
+
+export const resetWarehouse = (fetchImpl: FetchLike = fetch) =>
+  request<{ movementsDeleted: number; productsReset: number }>(`${BASE}/reset`, json('POST', { confirm: RESET_CONFIRM_WORD }), fetchImpl,
+    (body) => Boolean(body) && typeof body.productsReset === 'number');

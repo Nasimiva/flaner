@@ -3,7 +3,12 @@ import { useShop } from '../context/ShopContext';
 import { categoryLabelById } from '../utils/categories';
 import { AdminApiError } from '../utils/adminLeadsApi';
 import {
+  BACKUP_FILES,
   MOVEMENT_LABELS,
+  fetchBackup,
+  isResetConfirmed,
+  resetWarehouse,
+  RESET_CONFIRM_WORD,
   addReceipt,
   cancelSale,
   currentMonth,
@@ -26,7 +31,7 @@ import {
   type StockItem,
   type StockList
 } from '../utils/inventoryApi';
-import { AlertCircle, ChevronLeft, ChevronRight, Download, Minus, PackagePlus, Pencil, RefreshCw, Search, Undo2, X } from 'lucide-react';
+import { AlertCircle, ChevronLeft, ChevronRight, Download, Minus, Trash2, PackagePlus, Pencil, RefreshCw, Search, Undo2, X } from 'lucide-react';
 
 // Admin-only screens: warehouse ("Склад"), monthly report ("Отчёт") and the movement journal ("Журнал").
 // Quantities, cost price and sales are loaded only here, from /api/admin/inventory; the storefront never sees them.
@@ -153,6 +158,71 @@ const RowPanel: React.FC<{
   );
 };
 
+/** Saves a Blob through a temporary link; the browser puts it in the downloads folder. */
+const saveBlob = (blob: Blob, filename: string) => {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+};
+
+const ResetDialog: React.FC<{ onClose: () => void; onDone: () => void }> = ({ onClose, onDone }) => {
+  const { showToast } = useShop();
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const run = async () => {
+    if (!isResetConfirmed(typed) || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      // 1. The backups come first. If either cannot be fetched, nothing is deleted.
+      const stamp = new Date().toISOString().slice(0, 10);
+      const files = await Promise.all(BACKUP_FILES.map(async (file) => ({ filename: file.filename, blob: await fetchBackup(file.url) })));
+      for (const file of files) saveBlob(file.blob, `${stamp}-${file.filename}`);
+      // 2. Only then the reset itself.
+      const result = await resetWarehouse();
+      showToast(`Склад обнулён: товаров ${result.productsReset}, записей журнала удалено ${result.movementsDeleted}. Копии скачаны.`, 'info');
+      onDone();
+      onClose();
+    } catch (cause) {
+      setError(errorMessage(cause, 'Не удалось обнулить склад.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="reset-title" data-testid="reset-dialog">
+      <div className="bg-white rounded-2xl max-w-md w-full p-5 space-y-3 shadow-xl">
+        <h3 id="reset-title" className="text-base font-bold text-[#2A2421]">Обнулить склад?</h3>
+        <ul className="text-xs text-[#52443C] list-disc pl-4 space-y-1">
+          <li>Остаток каждого товара станет 0.</li>
+          <li>История приходов, продаж и пересчётов будет удалена, отчёты за прошлые месяцы опустеют.</li>
+          <li>Отметка «В наличии» на сайте и закупочные цены не изменятся.</li>
+          <li>Перед удалением на ваш компьютер скачаются два файла CSV: текущие остатки и журнал. Это единственная копия, сохраните их.</li>
+        </ul>
+        <label className="block text-[11px] text-[#6E5C51] font-medium">
+          Для подтверждения введите слово <b>{RESET_CONFIRM_WORD}</b>
+          <input value={typed} onChange={(e) => setTyped(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') run(); }} className={`${inputClass} mt-1`} autoFocus autoComplete="off" data-testid="reset-confirm-input" />
+        </label>
+        {error && <p role="alert" data-testid="reset-error" className="text-xs font-semibold text-red-700">{error}</p>}
+        <div className="flex gap-2 justify-end">
+          <button onClick={onClose} disabled={busy} className={secondaryButton}>Отмена</button>
+          <button onClick={run} disabled={!isResetConfirmed(typed) || busy} className="bg-red-700 hover:bg-red-800 disabled:opacity-40 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5" data-testid="reset-submit">
+            <Trash2 className="w-3.5 h-3.5" /> {busy ? 'Скачиваем копии и обнуляем…' : 'Скачать копии и обнулить'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const AdminStock: React.FC = () => {
   const { categories } = useShop();
   const [filters, setFilters] = useState<StockFilters>({ q: '', category: '', brand: '', stock: 'all' });
@@ -161,6 +231,7 @@ export const AdminStock: React.FC = () => {
   const [error, setError] = useState<Error | null>(null);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState<{ id: string; mode: RowMode } | null>(null);
+  const [resetOpen, setResetOpen] = useState(false);
   const requestId = useRef(0);
 
   // Typing in the search box waits for a pause before asking the server.
@@ -214,7 +285,10 @@ export const AdminStock: React.FC = () => {
           <option value="zero">Нет в наличии (0)</option>
         </select>
         <button onClick={load} disabled={loading} className={secondaryButton}><RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Обновить</button>
+        <button onClick={() => setResetOpen(true)} className="sm:col-span-4 sm:w-fit text-xs font-semibold text-red-700 hover:bg-red-50 rounded-xl px-3 py-2 flex items-center gap-1.5 border border-red-200" data-testid="btn-reset-stock"><Trash2 className="w-3.5 h-3.5" /> Обнулить склад</button>
       </div>
+
+      {resetOpen && <ResetDialog onClose={() => setResetOpen(false)} onDone={load} />}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Stat label="Товаров" value={String(totals.products)} testId="stock-total-products" />

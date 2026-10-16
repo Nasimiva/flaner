@@ -1139,6 +1139,42 @@ describe('inventory and sales', () => {
     assert.ok(!csv.text.includes(';=HYPERLINK') && !csv.text.includes('\n=HYPERLINK'));
     assert.ok(csv.text.includes('ИТОГО'));
   });
+
+  it('resets the warehouse: stock 0 and empty journal, but the public flag and cost prices stay; needs the confirmation word and an admin', async () => {
+    await db.query("UPDATE products SET stock_count=5, in_stock=true WHERE id='inv-a'");
+    await inv('POST', '/products/inv-a/receipt', { quantity: 1 });
+    const flagsBefore = (await db.query("SELECT id, in_stock, cost_price FROM products ORDER BY id")).rows;
+    const stockBefore = (await db.query('SELECT count(*)::int n FROM products WHERE stock_count > 0')).rows[0].n;
+    assert.ok(stockBefore > 0 && (await db.query('SELECT count(*)::int n FROM stock_movements')).rows[0].n > 0);
+
+    // backups are admin only and contain the data that is about to disappear
+    assert.equal((await call('GET', '/api/admin/inventory/stock.csv')).status, 401);
+    assert.equal((await call('GET', '/api/admin/inventory/movements.csv')).status, 401);
+    const stockCsv = await admin('GET', '/api/admin/inventory/stock.csv');
+    assert.equal(stockCsv.status, 200);
+    assert.ok(stockCsv.text.startsWith('ID;Товар;') && stockCsv.text.includes('Inv Serum'));
+    const movementsCsv = await admin('GET', '/api/admin/inventory/movements.csv');
+    assert.equal(movementsCsv.status, 200);
+    assert.ok(movementsCsv.text.includes('receipt') && movementsCsv.text.includes('sale'));
+
+    // refused without the word, with a wrong word, and without a session: nothing changes
+    for (const body of [{}, { confirm: 'обнулить' }, { confirm: 'yes' }, { confirm: true }]) {
+      assert.equal((await inv('POST', '/reset', body)).status, 400, JSON.stringify(body));
+    }
+    assert.equal((await call('POST', '/api/admin/inventory/reset', { confirm: 'ОБНУЛИТЬ' })).status, 401);
+    assert.equal((await db.query('SELECT count(*)::int n FROM products WHERE stock_count > 0')).rows[0].n, stockBefore);
+
+    const done = await inv('POST', '/reset', { confirm: 'ОБНУЛИТЬ' });
+    assert.equal(done.status, 200, done.text);
+    assert.ok(done.json.movementsDeleted > 0 && done.json.productsReset === stockBefore);
+    assert.equal((await db.query('SELECT count(*)::int n FROM products WHERE stock_count <> 0')).rows[0].n, 0);
+    assert.equal((await db.query('SELECT count(*)::int n FROM stock_movements')).rows[0].n, 0);
+    assert.deepEqual((await db.query("SELECT id, in_stock, cost_price FROM products ORDER BY id")).rows, flagsBefore, 'in_stock and cost_price untouched');
+    assert.equal((await call('GET', '/api/products')).status, 200);
+    // running it again is harmless, and the warehouse works normally afterwards
+    assert.equal((await inv('POST', '/reset', { confirm: 'ОБНУЛИТЬ' })).json.productsReset, 0);
+    assert.equal((await inv('POST', '/products/inv-a/receipt', { quantity: 4 })).json.product.stockCount, 4);
+  });
 });
 
 // ---------------------------------------------------------------------------------------------

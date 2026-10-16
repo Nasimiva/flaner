@@ -19,6 +19,8 @@ const receiptBody = z.object({ quantity, costPrice: money.optional(), note });
 const saleBody = z.object({ quantity: quantity.default(1), unitPrice: money.optional(), note });
 const setStockBody = z.object({ stockCount: z.number().int('Укажите целое число').min(0, 'Остаток не может быть отрицательным').max(1000000), note });
 const costBody = z.object({ costPrice: money });
+export const RESET_CONFIRM_WORD = 'ОБНУЛИТЬ';
+const resetBody = z.object({ confirm: z.literal(RESET_CONFIRM_WORD, { error: `Для подтверждения введите слово ${RESET_CONFIRM_WORD}` }) });
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Дата в формате ГГГГ-ММ-ДД').refine((value) => {
   const date = new Date(`${value}T00:00:00Z`);
@@ -261,6 +263,46 @@ export function createInventoryRouter(pool: Pool) {
       return { product: restored.product, sale: marked.rows[0], cancellation: restored.movement };
     });
     res.json({ product: serializeStockItem(result.product), sale: serializeMovement(result.sale), movement: serializeMovement(result.cancellation) });
+  }));
+
+  // ---- backups and reset ---------------------------------------------------------------------
+
+  const sendCsv = (res: import('express').Response, filename: string, rows: string[][]) => {
+    // BOM so Excel opens the UTF-8 file with Cyrillic intact; ";" is the list separator of Russian-locale Excel.
+    res.set({ 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="${filename}"`, 'Cache-Control': 'no-store' })
+      .send('﻿' + rows.map((row) => row.join(';')).join('\r\n') + '\r\n');
+  };
+
+  router.get('/stock.csv', asyncHandler(async (_req, res) => {
+    const { rows } = await pool.query<ProductRow>(`SELECT ${PRODUCT_COLUMNS} FROM products ORDER BY brand, name, id`);
+    const lines = [['ID', 'Товар', 'Бренд', 'Категория', 'Цена', 'Закупочная цена', 'Остаток', 'На сайте в наличии']];
+    for (const row of rows) {
+      lines.push([csvText(row.id), csvText(row.name), csvText(row.brand), csvText(row.category), csvNumber(Number(row.price)), csvNumber(Number(row.cost_price)), String(row.stock_count), row.in_stock ? 'да' : 'нет']);
+    }
+    sendCsv(res, 'stock.csv', lines);
+  }));
+
+  router.get('/movements.csv', asyncHandler(async (_req, res) => {
+    const { rows } = await pool.query<MovementRow>(`SELECT ${MOVEMENT_COLUMNS} FROM stock_movements ORDER BY created_at, id`);
+    const lines = [['№', 'Дата (UTC)', 'Тип', 'Товар', 'Бренд', 'ID товара', 'Изменение', 'Остаток после', 'Цена продажи', 'Обычная цена', 'Себестоимость', 'Отменена', 'Заметка', 'Кто']];
+    for (const row of rows) {
+      const money = (value: number | null) => (value === null ? '' : csvNumber(Number(value)));
+      lines.push([String(row.id), row.created_at.toISOString(), row.kind, csvText(row.product_name), csvText(row.brand), csvText(row.product_id ?? ''), String(row.delta), String(row.stock_after),
+        money(row.unit_price), money(row.list_price), money(row.unit_cost), row.cancelled_at ? 'да' : '', csvText(row.note ?? ''), csvText(row.actor)]);
+    }
+    sendCsv(res, 'movements.csv', lines);
+  }));
+
+  // Sets every stock to 0 and clears the journal. The public in_stock flag and the cost prices are left alone.
+  // The word must be sent again here, so a stray request cannot wipe the warehouse; the screen downloads the CSV backups first.
+  router.post('/reset', asyncHandler(async (req, res) => {
+    resetBody.parse(req.body);
+    const result = await withTransaction(pool, async (client) => {
+      const movements = await client.query('DELETE FROM stock_movements');
+      const products = await client.query('UPDATE products SET stock_count = 0, updated_at = NOW() WHERE stock_count <> 0');
+      return { movementsDeleted: movements.rowCount ?? 0, productsReset: products.rowCount ?? 0 };
+    });
+    res.json(result);
   }));
 
   // ---- journal -------------------------------------------------------------------------------

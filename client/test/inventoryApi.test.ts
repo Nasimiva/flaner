@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 import {
-  addReceipt, cancelSale, currentMonth, getReport, listMovements, listStock, parseAmount, reportCsvUrl, sellProduct, stockLevel, stockTotals, type StockItem
+  addReceipt, BACKUP_FILES, cancelSale, fetchBackup, isResetConfirmed, RESET_CONFIRM_WORD, resetWarehouse, currentMonth, getReport, listMovements, listStock, parseAmount, reportCsvUrl, sellProduct, stockLevel, stockTotals, type StockItem
 } from '../src/utils/inventoryApi.ts';
 
 const reply = (status: number, body: unknown): typeof fetch => (async () => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })) as typeof fetch;
@@ -83,5 +83,32 @@ describe('the storefront never carries stock or cost', () => {
     for (const file of storefrontFiles) {
       assert.doesNotMatch(fs.readFileSync(file, 'utf8'), /admin\/inventory/, path.relative(srcDir, file));
     }
+  });
+});
+
+describe('reset warehouse ("Обнулить склад")', () => {
+  it('needs exactly the word ОБНУЛИТЬ', () => {
+    assert.equal(RESET_CONFIRM_WORD, 'ОБНУЛИТЬ');
+    assert.equal(isResetConfirmed('ОБНУЛИТЬ'), true);
+    assert.equal(isResetConfirmed('  ОБНУЛИТЬ '), true);
+    for (const wrong of ['', 'обнулить', 'ОБНУЛИТ', 'ОБНУЛИТЬ!', 'yes', 'OBNULIT']) assert.equal(isResetConfirmed(wrong), false, wrong);
+  });
+
+  it('backs up the stock and the journal, and a failed backup throws before any reset can start', async () => {
+    assert.deepEqual(BACKUP_FILES.map((file) => file.url), ['/api/admin/inventory/stock.csv', '/api/admin/inventory/movements.csv']);
+    const ok = (async () => new Response('a;b', { status: 200 })) as typeof fetch;
+    assert.equal(await (await fetchBackup(BACKUP_FILES[0].url, ok)).text(), 'a;b');
+    await assert.rejects(fetchBackup(BACKUP_FILES[0].url, reply(500, {})), (error: any) => error.code === 'backup_failed');
+    await assert.rejects(fetchBackup(BACKUP_FILES[1].url, reply(401, {})), (error: any) => error.code === 'unauthorized');
+    await assert.rejects(fetchBackup(BACKUP_FILES[1].url, (async () => { throw new Error('offline'); }) as typeof fetch), (error: any) => error.code === 'network');
+  });
+
+  it('sends the confirmation word with the reset request', async () => {
+    let seen: { url: string; init?: RequestInit } | undefined;
+    const fetchImpl = (async (url: string, init?: RequestInit) => { seen = { url, init }; return new Response(JSON.stringify({ movementsDeleted: 3, productsReset: 2 }), { status: 200 }); }) as unknown as typeof fetch;
+    assert.deepEqual(await resetWarehouse(fetchImpl), { movementsDeleted: 3, productsReset: 2 });
+    assert.equal(seen!.url, '/api/admin/inventory/reset');
+    assert.equal(seen!.init!.method, 'POST');
+    assert.deepEqual(JSON.parse(String(seen!.init!.body)), { confirm: 'ОБНУЛИТЬ' });
   });
 });
