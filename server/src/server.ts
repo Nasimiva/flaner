@@ -1,5 +1,4 @@
 import express from 'express';
-import { rateLimit } from 'express-rate-limit';
 import path from 'path';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
@@ -11,6 +10,7 @@ import { createLeadRouters } from './modules/leads/leadRoutes.js';
 import { formatLeadMessage } from './modules/leads/leadNotification.js';
 import { createSiteContentRouters } from './modules/siteContent/siteContentRoutes.js';
 import { createCategoryRouters } from './modules/categories/categoryRoutes.js';
+import { createInventoryRouter } from './modules/inventory/inventoryRoutes.js';
 
 dotenv.config();
 
@@ -195,91 +195,12 @@ const categoryRouters = createCategoryRouters(pool);
 app.use('/api/categories', categoryRouters.publicRouter);
 app.use('/api/admin/categories', requireAdmin, categoryRouters.adminRouter);
 
-// Orders are persisted in PostgreSQL. The browser may submit customer details and
-// item IDs, but prices, totals, delivery fees, and payment state are server-owned.
-// Legacy direct-order endpoint. It is the only public route that changes stock, so it is rate limited per client IP
-// (the shopper-facing checkout is POST /api/leads, which reserves nothing).
-const legacyOrderLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 10,
-  standardHeaders: 'draft-7',
-  legacyHeaders: false,
-  handler: (_req, res) => res.status(429).json({ error: 'Too many orders from this address. Try again later.', code: 'rate_limited' })
-});
+// Stock, sales, cost price and reports. Admin only; nothing from here may appear in the public API.
+app.use('/api/admin/inventory', requireAdmin, createInventoryRouter(pool));
 
-app.post('/api/orders', legacyOrderLimiter, async (req, res) => {
-  const submitted = req.body;
-  const items = submitted?.items;
-  const customer = submitted?.customer;
-  const paymentMethods = new Set(['card_online', 'telegram_payments', 'payme', 'click', 'stripe', 'cash_on_delivery']);
-  if (!customer || typeof customer.fullName !== 'string' || !customer.fullName.trim() ||
-      typeof customer.phone !== 'string' || !customer.phone.trim() || !Array.isArray(items) || !items.length ||
-      !items.every((item: any) => typeof item?.productId === 'string' && Number.isInteger(item.quantity) && item.quantity > 0) ||
-      new Set(items.map((item: any) => item.productId)).size !== items.length ||
-      !paymentMethods.has(submitted.paymentMethod) || !['courier', 'express', 'pickup'].includes(customer.deliveryType)) {
-    return res.status(400).json({ error: 'Invalid order details' });
-  }
-
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const ids = [...new Set(items.map((item: { productId: string }) => item.productId))];
-    const found = await client.query(
-      'SELECT id, name, brand, price, volume, images, in_stock, stock_count FROM products WHERE id = ANY($1::text[]) FOR UPDATE',
-      [ids]
-    );
-    const products = new Map(found.rows.map((product) => [product.id, product]));
-    if (products.size !== ids.length) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'One or more products are unavailable' });
-    }
-    const orderItems = items.map((item: { productId: string; quantity: number }) => {
-      const product = products.get(item.productId)!;
-      if (!product.in_stock || product.stock_count < item.quantity) throw new Error('INSUFFICIENT_STOCK');
-      return {
-        productId: product.id, productName: product.name, brand: product.brand,
-        image: Array.isArray(product.images) ? product.images[0] || '' : '',
-        price: Number(product.price), volume: product.volume, quantity: item.quantity
-      };
-    });
-    for (const item of items as Array<{ productId: string; quantity: number }>) {
-      await client.query(
-        'UPDATE products SET stock_count=stock_count-$2, in_stock=(stock_count-$2)>0, updated_at=NOW() WHERE id=$1',
-        [item.productId, item.quantity]
-      );
-    }
-    const subtotal = orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const deliveryFee = customer.deliveryType === 'pickup' ? 0 : customer.deliveryType === 'express' ? 45000 : subtotal >= 2000000 ? 0 : 30000;
-    const now = new Date().toISOString();
-    const id = `ord-${crypto.randomUUID()}`;
-    const orderNumber = `FL-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
-    const order = {
-      id, orderNumber, createdAt: now,
-      customer: {
-        fullName: customer.fullName.trim(), phone: customer.phone.trim(),
-        telegramUsername: typeof customer.telegramUsername === 'string' ? customer.telegramUsername : undefined,
-        telegramId: typeof customer.telegramId === 'string' || typeof customer.telegramId === 'number' ? customer.telegramId : undefined,
-        address: typeof customer.address === 'string' ? customer.address : '',
-        city: typeof customer.city === 'string' ? customer.city : '',
-        comment: typeof customer.comment === 'string' ? customer.comment : undefined,
-        deliveryType: customer.deliveryType
-      },
-      items: orderItems, subtotal, discount: 0, deliveryFee, total: subtotal + deliveryFee,
-      paymentMethod: submitted.paymentMethod, paymentStatus: 'pending', status: 'new'
-    };
-    await client.query('INSERT INTO orders (id, order_number, payload) VALUES ($1, $2, $3::jsonb)', [id, orderNumber, JSON.stringify(order)]);
-    await client.query('COMMIT');
-    res.status(201).json(order);
-  } catch (error) {
-    await client.query('ROLLBACK');
-    if (error instanceof Error && error.message === 'INSUFFICIENT_STOCK') return res.status(409).json({ error: 'A product is out of stock or has insufficient quantity' });
-    console.error('Could not create order:', error);
-    res.status(503).json({ error: 'Could not save order' });
-  } finally {
-    client.release();
-  }
-});
-
+// There is no public order endpoint: shoppers send a lead (POST /api/leads), which reserves nothing. Stock changes only
+// through the admin inventory API (sales, receipts, recounts), so no anonymous request can ever move it.
+// Legacy orders already stored in PostgreSQL stay readable by the admin below.
 app.get('/api/orders', requireAdmin, async (_req, res) => {
   try {
     const result = await pool.query('SELECT payload FROM orders ORDER BY created_at DESC');

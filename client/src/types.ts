@@ -24,7 +24,6 @@ export interface Product {
   howToUse?: string;
   skinType?: string; // e.g., 'Для всех типов кожи', 'Сухая и чувствительная'
   inStock: boolean;
-  stockCount: number;
   isNew?: boolean;
   isBestseller?: boolean;
 }

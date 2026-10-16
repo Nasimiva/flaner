@@ -468,26 +468,30 @@ describe('POST /api/leads', () => {
     assert.equal(res.status, 201);
     assert.equal((await db.query("SELECT count(*)::int n FROM information_schema.tables WHERE table_name = 'leads'")).rows[0].n, 1);
   });
-
-  it('does not touch the legacy orders flow (POST /api/orders still works and still moves stock)', async () => {
-    await db.query("INSERT INTO products (id,name,brand,category,price,volume,in_stock,stock_count) VALUES ('p-legacy','Legacy','B','makeup',50000,'1',true,3)");
-    const res = await call('POST', '/api/orders', {
-      customer: { fullName: 'Legacy Buyer', phone: '+998901112233', deliveryType: 'pickup' },
-      items: [{ productId: 'p-legacy', quantity: 2 }], paymentMethod: 'cash_on_delivery'
-    });
-    assert.equal(res.status, 201, res.text);
-    assert.equal(res.json.total, 100000);
-    assert.equal((await db.query("SELECT stock_count FROM products WHERE id = 'p-legacy'")).rows[0].stock_count, 1);
-    assert.equal((await call('GET', '/api/products')).status, 200);
-  });
 });
 
 describe('legacy order endpoints are not an open door', () => {
-  it('rate limits anonymous POST /api/orders so stock cannot be drained in a loop', async () => {
-    const base = await startServer(await freePort());
-    const statuses: number[] = [];
-    for (let i = 0; i < 12; i++) statuses.push((await call('POST', '/api/orders', { items: [] }, {}, base)).status);
-    assert.deepEqual(statuses, [...Array(10).fill(400), 429, 429]);
+  it('has no public order endpoint: no anonymous request can change stock', async () => {
+    await db.query("INSERT INTO products (id,name,brand,category,price,volume,in_stock,stock_count) VALUES ('p-legacy','Legacy','B','makeup',50000,'1',true,3)");
+    const order = {
+      customer: { fullName: 'Legacy Buyer', phone: '+998901112233', deliveryType: 'pickup' },
+      items: [{ productId: 'p-legacy', quantity: 2 }], paymentMethod: 'cash_on_delivery'
+    };
+    const before = (await db.query("SELECT stock_count, in_stock FROM products WHERE id='p-legacy'")).rows[0];
+    const ordersBefore = (await db.query('SELECT count(*)::int n FROM orders')).rows[0].n;
+    for (const [method, url, body] of [['POST', '/api/orders', order], ['PUT', '/api/orders', order], ['PATCH', '/api/orders/x/status', { status: 'paid' }],
+      ['POST', '/api/products/p-legacy/stock', { stockCount: 99 }], ['PUT', '/api/products/p-legacy/stock', { stockCount: 99 }],
+      ['PATCH', '/api/products/p-legacy/stock', { stockCount: 99, inStock: true }], ['POST', '/api/leads', { items: [{ productId: 'p-legacy', quantity: 2 }] }]] as const) {
+      const res = await call(method, url, body);
+      assert.ok([400, 401, 404, 405].includes(res.status), `${method} ${url} -> ${res.status}`);
+    }
+    // a real lead for the product is accepted but reserves nothing
+    assert.equal((await postLead(validLead({ items: [{ productId: 'p-legacy', quantity: 2 }] }))).status, 201);
+    assert.deepEqual((await db.query("SELECT stock_count, in_stock FROM products WHERE id='p-legacy'")).rows[0], before, 'stock and flag untouched');
+    assert.equal((await db.query('SELECT count(*)::int n FROM orders')).rows[0].n, ordersBefore, 'no order was created');
+    assert.equal((await db.query("SELECT count(*)::int n FROM stock_movements WHERE product_id='p-legacy'")).rows[0].n, 0);
+    // the admin can still list the legacy orders
+    assert.equal((await admin('GET', '/api/orders')).status, 200);
   });
 
   it('POST /api/telegram/send-order needs an admin session', async () => {
@@ -886,7 +890,11 @@ describe('migration 005_categories', () => {
       assert.match(first.stdout, /Applied migration 006_catalog_categories\.sql/);
       assert.deepEqual((await snapshot(scratch)).map((c) => c.id),
         ['blush', 'contour', 'eye-pencil', 'eyeshadow', 'face-care', 'foundation', 'highlighter', 'lips', 'makeup', 'mascara', 'other', 'perfume', 'powder', 'sets']);
-      assert.deepEqual((await scratch.query('SELECT * FROM products ORDER BY id')).rows, productsBefore, 'every product column is untouched');
+      // 009_inventory adds cost_price (default 0); every pre-existing column, stock included, must be untouched.
+      assert.match(first.stdout, /Applied migration 009_inventory.sql/);
+      const productsAfter = (await scratch.query('SELECT * FROM products ORDER BY id')).rows;
+      assert.ok(productsAfter.every((row) => row.cost_price === 0), 'cost price starts at 0');
+      assert.deepEqual(productsAfter.map(({ cost_price, ...rest }) => rest), productsBefore, 'every product column is untouched');
 
       // The admin edits things, then the deploy (migrate) runs again.
       await scratch.query("UPDATE categories SET name_ru = 'Правка' WHERE id = 'makeup'");
@@ -898,7 +906,7 @@ describe('migration 005_categories', () => {
       assert.doesNotMatch(second.stdout, /Applied migration/, 'a second run applies nothing');
       assert.deepEqual(await snapshot(scratch), categoriesAfterEdit, 'admin edits survive a re-run');
       assert.equal((await scratch.query("SELECT category FROM products WHERE id = 'p-old-1'")).rows[0].category, 'cat-new');
-      assert.equal((await scratch.query('SELECT count(*)::int n FROM schema_migrations')).rows[0].n, 6);
+      assert.equal((await scratch.query('SELECT count(*)::int n FROM schema_migrations')).rows[0].n, 7);
     } finally {
       await scratch.end();
       await db.query(`DROP DATABASE IF EXISTS ${name}`);
@@ -936,6 +944,200 @@ describe('migration 006_catalog_categories', () => {
       await db.query("DELETE FROM categories WHERE id IN ('cat-sets1', 'cat-hair1')");
       await db.query("INSERT INTO categories (id, name_ru, name_uz, sort_order) VALUES ('sets', 'Наборы и адвент-календари', '', 120) ON CONFLICT DO NOTHING");
     }
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Inventory, sales, cost and monthly report (admin only)
+// ---------------------------------------------------------------------------------------------
+describe('inventory and sales', () => {
+  const stockOf = async (id: string) => (await db.query('SELECT stock_count, in_stock FROM products WHERE id=$1', [id])).rows[0] as { stock_count: number; in_stock: boolean };
+  const inv = (method: string, url: string, body?: unknown) => admin(method, `/api/admin/inventory${url}`, body);
+  const currentMonth = () => new Date(Date.now() + 5 * 3600_000).toISOString().slice(0, 7);
+
+  before(async () => {
+    for (const [id, name, price, cost, stock] of [['inv-a', 'Inv Serum', 100000, 60000, 3], ['inv-b', 'Inv Cream', 250000, 100000, 0], ['inv-c', 'Inv Mask', 50000, 20000, 2]] as const) {
+      await db.query(`INSERT INTO products (id, name, brand, category, price, cost_price, volume, in_stock, stock_count) VALUES ($1,$2,'InvBrand','makeup',$3,$4,'50 ml',$5,$6)`, [id, name, price, cost, stock > 0, stock]);
+    }
+  });
+
+  it('is admin only: every inventory endpoint answers 401 without a session', async () => {
+    for (const [method, url] of [['GET', '/products'], ['POST', '/products/inv-a/receipt'], ['POST', '/products/inv-a/sale'], ['PUT', '/products/inv-a/stock'],
+      ['PUT', '/products/inv-a/cost-price'], ['POST', '/movements/1/cancel'], ['GET', '/movements'], ['GET', '/report'], ['GET', '/report.csv']]) {
+      assert.equal((await call(method, `/api/admin/inventory${url}`, method === 'GET' ? undefined : {})).status, 401, `${method} ${url}`);
+    }
+  });
+
+  it('never exposes quantity, cost or sales in the public API', async () => {
+    const publicCatalog = await call('GET', '/api/products');
+    assert.equal(publicCatalog.status, 200);
+    const item = publicCatalog.json.find((p: any) => p.id === 'inv-a');
+    assert.equal(item.inStock, true);
+    for (const body of publicCatalog.json) {
+      for (const key of ['stockCount', 'stock_count', 'costPrice', 'cost_price', 'sales']) assert.ok(!(key in body), `${key} leaked`);
+    }
+    assert.ok(!/stock_?count|cost_?price/i.test(publicCatalog.text), 'no stock/cost field anywhere in the public JSON');
+    // the admin product write responses are public-shaped too
+    const saved = await admin('PUT', '/api/products/inv-a', { ...item, stockCount: 999, name: 'Inv Serum' });
+    assert.equal(saved.status, 200, saved.text);
+    assert.ok(!('stockCount' in saved.json));
+    assert.equal((await stockOf('inv-a')).stock_count, 3, 'a product edit cannot change the stock');
+  });
+
+  it('records a receipt and lets cost price follow it', async () => {
+    const res = await inv('POST', '/products/inv-b/receipt', { quantity: 4, costPrice: 110000, note: 'поставка' });
+    assert.equal(res.status, 201, res.text);
+    assert.equal(res.json.product.stockCount, 4);
+    assert.equal(res.json.product.costPrice, 110000);
+    assert.equal(res.json.movement.kind, 'receipt');
+    assert.deepEqual(await stockOf('inv-b'), { stock_count: 4, in_stock: true });
+    assert.equal((await inv('POST', '/products/inv-b/receipt', { quantity: 0 })).status, 400);
+    assert.equal((await inv('POST', '/products/inv-b/receipt', { quantity: 1.5 })).status, 400);
+    assert.equal((await inv('POST', '/products/no-such/receipt', { quantity: 1 })).status, 404);
+  });
+
+  it('sells 1 by default, at the regular price, and refuses to go below zero', async () => {
+    const sale = await inv('POST', '/products/inv-c/sale', {});
+    assert.equal(sale.status, 201, sale.text);
+    assert.equal(sale.json.movement.delta, -1);
+    assert.equal(sale.json.movement.unitPrice, 50000);
+    assert.equal(sale.json.movement.unitCost, 20000);
+    assert.equal(sale.json.product.stockCount, 1);
+    const tooMany = await inv('POST', '/products/inv-c/sale', { quantity: 5 });
+    assert.equal(tooMany.status, 409);
+    assert.equal(tooMany.json.code, 'insufficient_stock');
+    assert.equal((await stockOf('inv-c')).stock_count, 1, 'unchanged after the refused sale');
+    const last = await inv('POST', '/products/inv-c/sale', {});
+    assert.equal(last.json.product.stockCount, 0);
+    assert.equal((await stockOf('inv-c')).in_stock, false, 'sold out turns the public flag off');
+    assert.equal((await inv('POST', '/products/inv-c/sale', {})).status, 409, 'cannot sell from an empty shelf');
+  });
+
+  it('never oversells under concurrent sales of the last items', async () => {
+    const results = await Promise.all(Array.from({ length: 8 }, () => inv('POST', '/products/inv-a/sale', { quantity: 1 })));
+    assert.equal(results.filter((r) => r.status === 201).length, 3);
+    assert.equal(results.filter((r) => r.status === 409).length, 5);
+    assert.equal((await stockOf('inv-a')).stock_count, 0);
+    await inv('PUT', '/products/inv-a/stock', { stockCount: 3 });
+  });
+
+  it('sells at a discounted price and keeps the regular price for the record', async () => {
+    const sale = await inv('POST', '/products/inv-a/sale', { quantity: 2, unitPrice: 80000 });
+    assert.equal(sale.status, 201, sale.text);
+    assert.equal(sale.json.movement.unitPrice, 80000);
+    assert.equal(sale.json.movement.listPrice, 100000);
+    assert.equal(sale.json.movement.delta, -2);
+    assert.equal((await inv('POST', '/products/inv-a/sale', { unitPrice: -5 })).status, 400);
+  });
+
+  it('cancels a sale exactly once and returns the items to the shelf', async () => {
+    const before1 = (await stockOf('inv-a')).stock_count;
+    const sale = await inv('POST', '/products/inv-a/sale', { quantity: 1 });
+    assert.equal((await stockOf('inv-a')).stock_count, before1 - 1);
+    const cancelled = await inv('POST', `/movements/${sale.json.movement.id}/cancel`);
+    assert.equal(cancelled.status, 200, cancelled.text);
+    assert.equal(cancelled.json.sale.cancelled, true);
+    assert.equal(cancelled.json.movement.kind, 'sale_cancel');
+    assert.equal((await stockOf('inv-a')).stock_count, before1);
+    const again = await inv('POST', `/movements/${sale.json.movement.id}/cancel`);
+    assert.equal(again.status, 409);
+    assert.equal(again.json.code, 'already_cancelled');
+    assert.equal((await stockOf('inv-a')).stock_count, before1, 'no double return');
+    // concurrent cancels of one sale: exactly one wins
+    const second = await inv('POST', '/products/inv-a/sale', { quantity: 1 });
+    const race = await Promise.all([1, 2, 3].map(() => inv('POST', `/movements/${second.json.movement.id}/cancel`)));
+    assert.equal(race.filter((r) => r.status === 200).length, 1);
+    assert.equal((await stockOf('inv-a')).stock_count, before1);
+    assert.equal((await inv('POST', `/movements/${cancelled.json.movement.id}/cancel`)).status, 409, 'a cancellation is not a sale');
+    assert.equal((await inv('POST', '/movements/999999/cancel')).status, 404);
+  });
+
+  it('recounts the stock with an adjustment row and rejects negatives', async () => {
+    const res = await inv('PUT', '/products/inv-b/stock', { stockCount: 10 });
+    assert.equal(res.status, 200, res.text);
+    assert.equal(res.json.movement.kind, 'adjustment');
+    assert.equal(res.json.movement.delta, 10 - 4);
+    assert.equal((await inv('PUT', '/products/inv-b/stock', { stockCount: 10 })).json.movement, null, 'no change, no journal row');
+    assert.equal((await inv('PUT', '/products/inv-b/stock', { stockCount: -1 })).status, 400);
+    assert.equal((await inv('PUT', '/products/inv-b/cost-price', { costPrice: 120000 })).json.product.costPrice, 120000);
+    await inv('PUT', '/products/inv-b/cost-price', { costPrice: 110000 });
+  });
+
+  it('lists the warehouse with filters and the value of the remainders', async () => {
+    const all = await inv('GET', '/products?q=inv');
+    assert.equal(all.status, 200);
+    assert.equal(all.json.items.length, 3);
+    const expectedCost = all.json.items.reduce((sum: number, p: any) => sum + p.stockCount * p.costPrice, 0);
+    assert.equal(all.json.totals.costValue, expectedCost);
+    assert.equal((await inv('GET', '/products?q=inv&stock=zero')).json.items.map((p: any) => p.id).join(), 'inv-c');
+    assert.equal((await inv('GET', '/products?brand=InvBrand&category=makeup')).json.items.length, 3);
+    assert.equal((await inv('GET', '/products?brand=Nope')).json.items.length, 0);
+  });
+
+  it('builds the monthly report: sorted, with revenue, cost and profit, without cancelled sales', async () => {
+    const report = await inv('GET', `/report?month=${currentMonth()}`);
+    assert.equal(report.status, 200, report.text);
+    const lines = report.json.lines as any[];
+    const quantities = lines.map((l) => l.quantity);
+    assert.deepEqual(quantities, [...quantities].sort((a, b) => b - a), 'top sellers first');
+    const serum = lines.find((l) => l.productId === 'inv-a');
+    // inv-a: 3 sold in the concurrency test at 100000, 2 at 80000 (discount); cancelled sales are excluded
+    assert.equal(serum.quantity, 5);
+    assert.equal(serum.revenue, 3 * 100000 + 2 * 80000);
+    assert.equal(serum.cost, 5 * 60000);
+    assert.equal(serum.profit, serum.revenue - serum.cost);
+    assert.equal(report.json.totals.quantity, lines.reduce((sum, l) => sum + l.quantity, 0));
+    assert.equal(report.json.totals.profit, report.json.totals.revenue - report.json.totals.cost);
+    assert.ok(report.json.outOfStock.some((p: any) => p.id === 'inv-c'));
+    assert.ok(report.json.lowStock.some((p: any) => p.id === 'inv-a' && p.stockCount === 1), 'stock 1 is low');
+    await db.query("UPDATE products SET stock_count=3 WHERE id='inv-a'");
+    assert.ok(!(await inv('GET', '/report')).json.lowStock.some((p: any) => p.id === 'inv-a'), 'default month is the current one; stock 3 is not low');
+    assert.deepEqual((await inv('GET', '/report?month=2001-01')).json.lines, [], 'an empty month');
+    assert.equal((await inv('GET', '/report?month=2026-13')).status, 400);
+  });
+
+  it('keeps sales in the right Tashkent month at the boundary and survives product deletion', async () => {
+    await db.query(`INSERT INTO products (id, name, brand, category, price, cost_price, volume, stock_count) VALUES ('inv-d','Inv Gone','InvBrand','makeup',1000,400,'1',5)`);
+    await db.query(`INSERT INTO stock_movements (product_id, product_name, brand, kind, delta, stock_after, unit_price, list_price, unit_cost, created_at) VALUES
+      ('inv-d','Inv Gone','InvBrand','sale',-1,4,1000,1000,400,'2031-03-31T18:59:00Z'),
+      ('inv-d','Inv Gone','InvBrand','sale',-1,3,1000,1000,400,'2031-03-31T19:01:00Z')`);
+    assert.equal((await inv('GET', '/report?month=2031-03')).json.totals.quantity, 1, 'UTC 18:59 is still March in Tashkent (UTC+5)');
+    assert.equal((await inv('GET', '/report?month=2031-04')).json.totals.quantity, 1, 'UTC 19:01 is already April in Tashkent');
+    assert.equal((await admin('DELETE', '/api/products/inv-d')).status, 204);
+    const after = await inv('GET', '/report?month=2031-03');
+    assert.equal(after.json.lines[0].name, 'Inv Gone', 'history survives the deletion of the product');
+    const journal = await inv('GET', '/movements?kind=sale&from=2031-03-31&to=2031-03-31');
+    assert.equal(journal.json.total, 1, 'journal date filter uses shop-local days (the 18:59 UTC sale only)');
+    const gone = journal.json.items[0];
+    assert.equal((await inv('POST', `/movements/${gone.id}/cancel`)).json.code, 'product_deleted');
+  });
+
+  it('filters the journal by product, type and date, and rejects bad dates', async () => {
+    const byProduct = await inv('GET', '/movements?productId=inv-b');
+    assert.ok(byProduct.json.total >= 2 && byProduct.json.items.every((m: any) => m.productId === 'inv-b'));
+    const today = new Date(Date.now() + 5 * 3600_000).toISOString().slice(0, 10);
+    const sales = await inv('GET', `/movements?kind=sale&productId=inv-a&from=${today}&to=${today}`);
+    assert.equal(sales.status, 200, sales.text);
+    assert.ok(sales.json.items.length > 0 && sales.json.items.every((m: any) => m.kind === 'sale'));
+    assert.equal((await inv('GET', '/movements?from=2026-02-31')).status, 400);
+    assert.equal((await inv('GET', '/movements?kind=hack')).status, 400);
+    assert.equal((await inv('GET', '/movements?pageSize=1')).json.items.length, 1);
+  });
+
+  it('exports the report as an Excel-friendly CSV and neutralises formulas', async () => {
+    await db.query("UPDATE products SET name='=HYPERLINK(1)' WHERE id='inv-b'");
+    await inv('POST', '/products/inv-b/sale', { quantity: 1 });
+    const csv = await admin('GET', `/api/admin/inventory/report.csv?month=${currentMonth()}`);
+    assert.equal(csv.status, 200);
+    assert.match(csv.headers.get('content-type') ?? '', /text\/csv/);
+    assert.match(csv.headers.get('content-disposition') ?? '', /attachment; filename="report-\d{4}-\d{2}\.csv"/);
+    // res.text() strips the BOM, so the raw bytes are checked: EF BB BF, then the header.
+    const raw = Buffer.from(await (await fetch(`${BASE}/api/admin/inventory/report.csv?month=${currentMonth()}`, { headers: { Cookie: cookie } })).arrayBuffer());
+    assert.deepEqual([...raw.subarray(0, 3)], [0xef, 0xbb, 0xbf], 'UTF-8 BOM for Excel');
+    assert.ok(csv.text.startsWith('Товар;Бренд;'), 'header');
+    assert.ok(csv.text.includes("'=HYPERLINK(1)"), 'formula prefixed with an apostrophe');
+    assert.ok(!csv.text.includes(';=HYPERLINK') && !csv.text.includes('\n=HYPERLINK'));
+    assert.ok(csv.text.includes('ИТОГО'));
   });
 });
 

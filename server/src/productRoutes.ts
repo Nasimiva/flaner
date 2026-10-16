@@ -18,7 +18,6 @@ interface ProductRecord {
   how_to_use: string | null;
   skin_type: string | null;
   in_stock: boolean;
-  stock_count: number;
   is_new: boolean | null;
   is_bestseller: boolean | null;
 }
@@ -43,8 +42,9 @@ function serializeProduct(row: ProductRecord) {
     composition: row.composition,
     ...(row.how_to_use !== null ? { howToUse: row.how_to_use } : {}),
     ...(row.skin_type !== null ? { skinType: row.skin_type } : {}),
+    // Shoppers only learn "available or not". The quantity, the cost price and the sales live in the admin-only
+    // inventory API (modules/inventory) and must never be added here.
     inStock: row.in_stock,
-    stockCount: row.stock_count,
     ...(row.is_new !== null ? { isNew: row.is_new } : {}),
     ...(row.is_bestseller !== null ? { isBestseller: row.is_bestseller } : {})
   };
@@ -63,7 +63,6 @@ function validateProduct(value: unknown): string | null {
   if (!Array.isArray(product.images) || !product.images.every((image) => typeof image === 'string')) return 'images must be an array of strings';
   if (typeof product.description !== 'string' || typeof product.composition !== 'string') return 'description and composition are required';
   if (typeof product.inStock !== 'boolean') return 'inStock must be a boolean';
-  if (!Number.isInteger(product.stockCount) || Number(product.stockCount) < 0) return 'stockCount must be a non-negative integer';
   if (product.oldPrice !== undefined && product.oldPrice !== null && (typeof product.oldPrice !== 'number' || !Number.isFinite(product.oldPrice) || product.oldPrice < 0)) return 'oldPrice must be a non-negative number';
   for (const key of ['howToUse', 'skinType']) {
     if (product[key] !== undefined && product[key] !== null && typeof product[key] !== 'string') return `${key} must be a string`;
@@ -86,17 +85,18 @@ function values(product: Record<string, unknown>) {
     product.name, product.brand, product.category, product.price, product.oldPrice ?? null,
     product.rating, product.reviewsCount, product.volume, JSON.stringify(product.images),
     product.description, product.composition, product.howToUse ?? null, product.skinType ?? null,
-    product.inStock, product.stockCount, product.isNew ?? null, product.isBestseller ?? null
+    product.inStock, product.isNew ?? null, product.isBestseller ?? null
   ];
 }
 
 const columns = `name, brand, category, price, old_price, rating, reviews_count, volume,
-  images, description, composition, how_to_use, skin_type, in_stock, stock_count, is_new, is_bestseller`;
+  images, description, composition, how_to_use, skin_type, in_stock, is_new, is_bestseller`;
 const setters = `name=$2, brand=$3, category=$4, price=$5, old_price=$6, rating=$7,
   reviews_count=$8, volume=$9, images=$10::jsonb, description=$11, composition=$12,
-  how_to_use=$13, skin_type=$14, in_stock=$15, stock_count=$16, is_new=$17,
-  is_bestseller=$18, updated_at=NOW()`;
+  how_to_use=$13, skin_type=$14, in_stock=$15, is_new=$16,
+  is_bestseller=$17, updated_at=NOW()`;
 
+// Stock is not part of a product edit: it only changes through the inventory API (receipts, sales, recounts).
 // Public catalog read endpoint for the storefront and Telegram Mini Apps.
 routes.get('/', async (_req, res) => {
   try {
@@ -115,7 +115,7 @@ routes.post('/', productWriteGuard, async (req, res) => {
   try {
     if (!(await categoryExists(req.body.category))) return res.status(400).json({ error: 'category does not exist' });
     const result = await pool.query<ProductRecord>(
-      `INSERT INTO products (id, ${columns}) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13, $14, $15, $16, $17, $18) RETURNING id, ${columns}`,
+      `INSERT INTO products (id, ${columns}) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13, $14, $15, $16, $17) RETURNING id, ${columns}`,
       [id, ...values(req.body)]
     );
     res.status(201).json(serializeProduct(result.rows[0]));

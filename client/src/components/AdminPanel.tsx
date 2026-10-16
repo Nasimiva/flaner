@@ -6,6 +6,7 @@ import { formatPrice, formatDate, oldPriceToSave } from '../utils/formatters';
 import { triggerHaptic } from '../utils/telegram';
 import { AdminLeads } from './AdminLeads';
 import { AdminContent } from './AdminContent';
+import { AdminJournal, AdminReport, AdminStock } from './AdminInventory';
 import {
   ClipboardList,
   Package,
@@ -28,6 +29,9 @@ import {
   DollarSign,
   CreditCard,
   Layers,
+  Boxes,
+  LineChart,
+  History,
   ChevronDown,
   ChevronUp,
   ExternalLink,
@@ -63,7 +67,7 @@ export const AdminPanel: React.FC = () => {
     resetDemoData
   } = useShop();
 
-  const [activeTab, setActiveTab] = useState<'leads' | 'orders' | 'products' | 'content' | 'analytics' | 'bot'>('leads');
+  const [activeTab, setActiveTab] = useState<'leads' | 'orders' | 'products' | 'stock' | 'report' | 'journal' | 'content' | 'analytics' | 'bot'>('leads');
   const [newLeadsCount, setNewLeadsCount] = useState(0);
 
   // Orders filtering
@@ -387,7 +391,6 @@ export const AdminPanel: React.FC = () => {
         howToUse: formHowToUse,
         skinType: formSkinType,
         inStock: true,
-        stockCount: 15,
         isNew: true
         });
       }
@@ -521,6 +524,45 @@ export const AdminPanel: React.FC = () => {
           </button>
 
           <button
+            onClick={() => setActiveTab('stock')}
+            data-testid="admin-tab-stock"
+            className={`flex items-center space-x-2 px-4 py-2.5 font-semibold text-xs rounded-xl transition-all whitespace-nowrap ${
+              activeTab === 'stock'
+                ? 'bg-[#2A2421] text-white shadow-sm'
+                : 'text-[#6E5C51] hover:bg-[#EAE1D7]'
+            }`}
+          >
+            <Boxes className="w-4 h-4" />
+            <span>Склад</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('report')}
+            data-testid="admin-tab-report"
+            className={`flex items-center space-x-2 px-4 py-2.5 font-semibold text-xs rounded-xl transition-all whitespace-nowrap ${
+              activeTab === 'report'
+                ? 'bg-[#2A2421] text-white shadow-sm'
+                : 'text-[#6E5C51] hover:bg-[#EAE1D7]'
+            }`}
+          >
+            <LineChart className="w-4 h-4" />
+            <span>Отчёт</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('journal')}
+            data-testid="admin-tab-journal"
+            className={`flex items-center space-x-2 px-4 py-2.5 font-semibold text-xs rounded-xl transition-all whitespace-nowrap ${
+              activeTab === 'journal'
+                ? 'bg-[#2A2421] text-white shadow-sm'
+                : 'text-[#6E5C51] hover:bg-[#EAE1D7]'
+            }`}
+          >
+            <History className="w-4 h-4" />
+            <span>Журнал</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('content')}
             data-testid="admin-tab-content"
             className={`flex items-center space-x-2 px-4 py-2.5 font-semibold text-xs rounded-xl transition-all whitespace-nowrap ${
@@ -560,6 +602,11 @@ export const AdminPanel: React.FC = () => {
 
         {/* TAB 0: LEADS (заявки) */}
         {activeTab === 'leads' && <AdminLeads onNewCount={setNewLeadsCount} />}
+
+        {/* Inventory (admin only): warehouse, monthly report, movement journal */}
+        {activeTab === 'stock' && <AdminStock />}
+        {activeTab === 'report' && <AdminReport />}
+        {activeTab === 'journal' && <AdminJournal />}
 
         {/* Editable storefront content: hero banners and brand strip */}
         {activeTab === 'content' && <AdminContent />}

@@ -86,7 +86,7 @@ export class AdminApiError extends Error {
 
 type FetchLike = typeof fetch;
 
-async function request<T>(url: string, init: RequestInit | undefined, fetchImpl: FetchLike, isValid: (body: any) => boolean): Promise<T> {
+export async function request<T>(url: string, init: RequestInit | undefined, fetchImpl: FetchLike, isValid: (body: any) => boolean): Promise<T> {
   let response: Response;
   try {
     response = await fetchImpl(url, init);
