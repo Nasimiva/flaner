@@ -56,17 +56,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product: rawProduct })
           src={product.images[0]}
           alt={product.name}
           brand={product.brand}
-          className={`w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500 ${product.inStock ? '' : 'grayscale opacity-60'}`}
+          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
           loading="lazy"
         />
 
         {/* Badges */}
         <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 z-10">
-          {!product.inStock && (
-            <span className="bg-[#2A2421] text-white text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider">
-              {t('product.outOfStock')}
-            </span>
-          )}
           {product.isBestseller && (
             <span className="bg-[#2A2421]/90 backdrop-blur-xs text-[#E8DDD4] text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider">
               {t('product.bestseller')}
@@ -152,7 +147,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product: rawProduct })
               <button
                 type="button"
                 disabled
-                className="flex-1 min-h-10 flex items-center justify-center bg-[#F3EEEA] text-[#8A796F] py-2 px-3 rounded-xl font-semibold text-xs border border-[#E5DDD4] cursor-not-allowed"
+                className="flex-1 min-h-10 flex items-center justify-center space-x-2 bg-[#F5EFEB] text-[#2A2421] py-2 px-3 rounded-xl font-medium text-xs border border-[#DFD6CD] cursor-not-allowed"
               >
                 {t('product.outOfStock')}
               </button>
