@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { Banner } from '../utils/siteContentApi';
 import { triggerHaptic } from '../utils/telegram';
 import { useI18n } from '../i18n/I18nContext';
@@ -100,7 +100,7 @@ export const HeroSlider: React.FC<HeroSliderProps> = ({ banners, ready, onCatego
     return (
       <div className="@container">
         <div aria-hidden="true" className="rounded-3xl overflow-hidden bg-[#EFE8DF]">
-          <div className="aspect-[4/3] @lg:aspect-[16/9] @5xl:aspect-[21/9] bg-[#E6DDD2]" />
+          <div className="aspect-video bg-[#E6DDD2]" />
           <div className="h-[72px]" />
         </div>
       </div>
@@ -139,7 +139,7 @@ export const HeroSlider: React.FC<HeroSliderProps> = ({ banners, ready, onCatego
       }}
     >
       {/* Stacked images share one box, so the hero never changes height between slides. */}
-      <div className="relative aspect-[4/3] @lg:aspect-[16/9] @5xl:aspect-[21/9] bg-[#E6DDD2] overflow-hidden">
+      <div className="relative aspect-video bg-[#E6DDD2] overflow-hidden">
         {slides.map((slide, i) => {
           if (failedImages.has(slide.id)) return null;
           const state = i === current ? 'active' : i === prev ? 'leaving' : 'idle';
@@ -193,6 +193,16 @@ export const HeroSlider: React.FC<HeroSliderProps> = ({ banners, ready, onCatego
           ) : (
             <div className="flex-1" />
           )}
+          {multiple && (
+            <div className="flex items-center gap-1.5">
+              <ArrowButton label={t('hero.prev')} onClick={() => goTo(current - 1)}>
+                <ChevronLeft className="w-4 h-4" />
+              </ArrowButton>
+              <ArrowButton label={t('hero.next')} onClick={() => goTo(current + 1)}>
+                <ChevronRight className="w-4 h-4" />
+              </ArrowButton>
+            </div>
+          )}
           {active.ctaLabel && <HeroCta banner={active} onCategory={onCategory} />}
         </div>
       )}
@@ -200,6 +210,18 @@ export const HeroSlider: React.FC<HeroSliderProps> = ({ banners, ready, onCatego
     </div>
   );
 };
+
+const ArrowButton: React.FC<{ label: string; onClick: () => void; children: React.ReactNode }> = ({ label, onClick, children }) => (
+  <button
+    type="button"
+    aria-label={label}
+    onClick={() => { triggerHaptic('selection'); onClick(); }}
+    className="w-9 h-9 shrink-0 rounded-full border border-[#221D1A]/20 text-[#221D1A] inline-flex items-center justify-center transition-[background-color,color,transform] duration-200 hover:bg-[#221D1A] hover:text-[#F9F7F5] active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6E4F3E]"
+    style={{ touchAction: 'manipulation' }}
+  >
+    {children}
+  </button>
+);
 
 const ctaClass =
   'group inline-flex items-center gap-3 rounded-full bg-[#221D1A] text-[#F9F7F5] pl-6 pr-2 min-h-12 text-sm font-semibold transition-[background-color,transform] duration-200 hover:bg-[#3D3531] active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6E4F3E]';
