@@ -72,11 +72,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product: rawProduct })
               {t('product.bestseller')}
             </span>
           )}
-          {product.isNew && (
-            <span className="bg-[#4A6B82]/90 backdrop-blur-xs text-white text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider">
-              {t('product.new')}
-            </span>
-          )}
           {hasOldPrice(product) && (
             <span className="bg-[#A64B2A]/90 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
               -{Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100)}%
