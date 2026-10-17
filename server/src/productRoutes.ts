@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { RequestHandler, Router } from 'express';
 import { pool } from './db/pool.js';
+import { isAvailable } from './availability.js';
 
 interface ProductRecord {
   id: string;
@@ -18,6 +19,7 @@ interface ProductRecord {
   how_to_use: string | null;
   skin_type: string | null;
   in_stock: boolean;
+  stock_count: number;
   is_new: boolean | null;
   is_bestseller: boolean | null;
 }
@@ -43,8 +45,9 @@ function serializeProduct(row: ProductRecord) {
     ...(row.how_to_use !== null ? { howToUse: row.how_to_use } : {}),
     ...(row.skin_type !== null ? { skinType: row.skin_type } : {}),
     // Shoppers only learn "available or not". The quantity, the cost price and the sales live in the admin-only
-    // inventory API (modules/inventory) and must never be added here.
-    inStock: row.in_stock,
+    // inventory API (modules/inventory) and must never be added here. A product with nothing left in the warehouse
+    // is unavailable even when its manual in_stock flag is still on; the stored flag itself is never rewritten.
+    inStock: isAvailable(row),
     ...(row.is_new !== null ? { isNew: row.is_new } : {}),
     ...(row.is_bestseller !== null ? { isBestseller: row.is_bestseller } : {})
   };
@@ -91,6 +94,8 @@ function values(product: Record<string, unknown>) {
 
 const columns = `name, brand, category, price, old_price, rating, reviews_count, volume,
   images, description, composition, how_to_use, skin_type, in_stock, is_new, is_bestseller`;
+// stock_count is only read to derive availability; it is never sent to shoppers.
+const readColumns = `${columns}, stock_count`;
 const setters = `name=$2, brand=$3, category=$4, price=$5, old_price=$6, rating=$7,
   reviews_count=$8, volume=$9, images=$10::jsonb, description=$11, composition=$12,
   how_to_use=$13, skin_type=$14, in_stock=$15, is_new=$16,
@@ -100,7 +105,7 @@ const setters = `name=$2, brand=$3, category=$4, price=$5, old_price=$6, rating=
 // Public catalog read endpoint for the storefront and Telegram Mini Apps.
 routes.get('/', async (_req, res) => {
   try {
-    const result = await pool.query<ProductRecord>(`SELECT id, ${columns} FROM products ORDER BY created_at DESC, id`);
+    const result = await pool.query<ProductRecord>(`SELECT id, ${readColumns} FROM products ORDER BY created_at DESC, id`);
     res.json(result.rows.map(serializeProduct));
   } catch (error) {
     console.error('Could not load products:', error);
@@ -115,7 +120,7 @@ routes.post('/', productWriteGuard, async (req, res) => {
   try {
     if (!(await categoryExists(req.body.category))) return res.status(400).json({ error: 'category does not exist' });
     const result = await pool.query<ProductRecord>(
-      `INSERT INTO products (id, ${columns}) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13, $14, $15, $16, $17) RETURNING id, ${columns}`,
+      `INSERT INTO products (id, ${columns}) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13, $14, $15, $16, $17) RETURNING id, ${readColumns}`,
       [id, ...values(req.body)]
     );
     res.status(201).json(serializeProduct(result.rows[0]));
@@ -131,7 +136,7 @@ routes.put('/:id', productWriteGuard, async (req, res) => {
   try {
     if (!(await categoryExists(req.body.category))) return res.status(400).json({ error: 'category does not exist' });
     const result = await pool.query<ProductRecord>(
-      `UPDATE products SET ${setters} WHERE id=$1 RETURNING id, ${columns}`,
+      `UPDATE products SET ${setters} WHERE id=$1 RETURNING id, ${readColumns}`,
       [req.params.id, ...values(req.body)]
     );
     if (!result.rowCount) return res.status(404).json({ error: 'Product not found' });
@@ -146,7 +151,7 @@ routes.patch('/:id/stock', productWriteGuard, async (req, res) => {
   if (typeof req.body?.inStock !== 'boolean') return res.status(400).json({ error: 'inStock must be a boolean' });
   try {
     const result = await pool.query<ProductRecord>(
-      `UPDATE products SET in_stock=$2, updated_at=NOW() WHERE id=$1 RETURNING id, ${columns}`,
+      `UPDATE products SET in_stock=$2, updated_at=NOW() WHERE id=$1 RETURNING id, ${readColumns}`,
       [req.params.id, req.body.inStock]
     );
     if (!result.rowCount) return res.status(404).json({ error: 'Product not found' });

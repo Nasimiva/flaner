@@ -2,6 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { withTransaction, isUniqueViolation, type Db } from '../../db/tx.js';
 import { HttpError } from '../../http/errors.js';
+import { isAvailable } from '../../availability.js';
 import {
   LEAD_TRANSITIONS,
   MAX_QUANTITY_PER_ITEM,
@@ -219,8 +220,8 @@ async function insertLead(
 
   // Products are the source of truth for name, brand, volume and price. Nothing is reserved or decremented.
   const ids = lines.map((line) => line.productId).sort();
-  const found = await db.query<{ id: string; name: string; brand: string; volume: string; price: number; in_stock: boolean }>(
-    `SELECT id, name, brand, volume, price, in_stock FROM products WHERE id = ANY($1::text[])`,
+  const found = await db.query<{ id: string; name: string; brand: string; volume: string; price: number; in_stock: boolean; stock_count: number }>(
+    `SELECT id, name, brand, volume, price, in_stock, stock_count FROM products WHERE id = ANY($1::text[])`,
     [ids]
   );
   const products = new Map(found.rows.map((row) => [row.id, row]));
@@ -229,7 +230,8 @@ async function insertLead(
   if (missing.length) {
     throw new HttpError(409, 'product_unavailable', 'Один из товаров больше недоступен. Обновите корзину.', { productIds: missing });
   }
-  const soldOut = found.rows.filter((row) => !row.in_stock);
+  // Same rule as the public catalog: the flag is on and the warehouse has stock. Nothing is reserved or decremented.
+  const soldOut = found.rows.filter((row) => !isAvailable(row));
   if (soldOut.length) {
     throw new HttpError(409, 'out_of_stock', `Нет в наличии: ${soldOut.map((row) => `«${row.name}»`).join(', ')}`, {
       productIds: soldOut.map((row) => row.id)
