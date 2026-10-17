@@ -1,9 +1,11 @@
 import React from 'react';
 import { useShop } from '../context/ShopContext';
 import { MoreVertical, X, CheckCircle, ShieldCheck } from 'lucide-react';
+import { useI18n } from '../i18n/I18nContext';
 
 export const TelegramFrame: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isTelegramFrame, setIsTelegramFrame } = useShop();
+  const { t } = useI18n();
 
   if (!isTelegramFrame) {
     return <>{children}</>;
@@ -19,7 +21,7 @@ export const TelegramFrame: React.FC<{ children: React.ReactNode }> = ({ childre
             onClick={() => setIsTelegramFrame(false)}
             className="text-xs text-[#6DB4F7] hover:text-white font-medium flex items-center space-x-1"
           >
-            <span>Закрыть</span>
+            <span>{t('tg.close')}</span>
           </button>
 
           <div className="text-center">
@@ -30,7 +32,7 @@ export const TelegramFrame: React.FC<{ children: React.ReactNode }> = ({ childre
               <CheckCircle className="w-3 h-3 text-[#2AABEE] fill-[#2AABEE]/20" />
             </div>
             <span className="text-[10px] text-[#8E9CAE] block">
-              бот @flaneruz_bot
+              {t('tg.bot')}
             </span>
           </div>
 
@@ -38,7 +40,7 @@ export const TelegramFrame: React.FC<{ children: React.ReactNode }> = ({ childre
             <button
               onClick={() => setIsTelegramFrame(false)}
               className="p-1 hover:text-white"
-              title="Выйти из режима Telegram"
+              title={t('tg.exitTitle')}
             >
               <MoreVertical className="w-4 h-4" />
             </button>
@@ -57,7 +59,7 @@ export const TelegramFrame: React.FC<{ children: React.ReactNode }> = ({ childre
       </div>
 
       <div className="text-center mt-3 text-xs text-[#8E9CAE]">
-        Режим симуляции Telegram Mini App (Нажмите «Закрыть» или в шапке для перехода в широкий экран)
+        {t('tg.simulation')}
       </div>
     </div>
   );

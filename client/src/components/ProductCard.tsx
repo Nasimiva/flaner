@@ -1,23 +1,29 @@
 import React from 'react';
 import { Product } from '../types';
 import { useShop } from '../context/ShopContext';
-import { formatPrice } from '../utils/formatters';
-import { Star, Plus, Minus, ShoppingBag, Eye } from 'lucide-react';
+import { Star, Plus, Minus, ShoppingBag, Eye, Heart } from 'lucide-react';
 import { triggerHaptic } from '../utils/telegram';
+import { useI18n } from '../i18n/I18nContext';
+import { hasOldPrice, hasReviews } from '../utils/formatters';
+import { ProductImage } from './ProductImage';
 
 interface ProductCardProps {
   product: Product;
 }
 
-export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
-  const { cart, addToCart, updateQuantity, openProductDetail, currency } = useShop();
+export const ProductCard: React.FC<ProductCardProps> = ({ product: rawProduct }) => {
+  const { cart, addToCart, updateQuantity, openProductDetail, currency, favoriteIds, toggleFavorite } = useShop();
+  const { t, formatPrice, localizeProduct } = useI18n();
+  // Show the text in the current language; the cart and the detail view always work with the raw catalog item.
+  const product = localizeProduct(rawProduct);
+  const isFavorite = favoriteIds.includes(product.id);
 
   const cartItem = cart.find((item) => item.product.id === product.id);
   const currentQuantity = cartItem ? cartItem.quantity : 0;
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.stopPropagation();
-    addToCart(product, 1);
+    addToCart(rawProduct, 1);
   };
 
   const handleIncrement = (e: React.MouseEvent) => {
@@ -30,8 +36,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
     updateQuantity(product.id, currentQuantity - 1);
   };
 
+  const handleToggleFavorite = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    toggleFavorite(product.id);
+  };
+
   const handleCardClick = () => {
-    openProductDetail(product);
+    openProductDetail(rawProduct);
   };
 
   return (
@@ -41,32 +52,43 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
     >
       {/* Product Image Area */}
       <div className="relative aspect-square w-full overflow-hidden bg-[#F5EFEB]">
-        <img
+        <ProductImage
           src={product.images[0]}
           alt={product.name}
-          referrerPolicy="no-referrer"
-          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+          brand={product.brand}
+          className={`w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500 ${product.inStock ? '' : 'grayscale opacity-60'}`}
           loading="lazy"
         />
 
         {/* Badges */}
         <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 z-10">
+          {!product.inStock && (
+            <span className="bg-[#2A2421] text-white text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider">
+              {t('product.outOfStock')}
+            </span>
+          )}
           {product.isBestseller && (
             <span className="bg-[#2A2421]/90 backdrop-blur-xs text-[#E8DDD4] text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider">
-              Хит продаж
+              {t('product.bestseller')}
             </span>
           )}
-          {product.isNew && (
-            <span className="bg-[#4A6B82]/90 backdrop-blur-xs text-white text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider">
-              Новинка
-            </span>
-          )}
-          {product.oldPrice && product.oldPrice > product.price && (
+          {hasOldPrice(product) && (
             <span className="bg-[#A64B2A]/90 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
               -{Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100)}%
             </span>
           )}
         </div>
+
+        {/* Favorite toggle (a separate wish list, not the cart) */}
+        <button
+          onClick={handleToggleFavorite}
+          aria-label={isFavorite ? t('product.favRemove') : t('product.favAdd')}
+          aria-pressed={isFavorite}
+          title={isFavorite ? t('product.favRemove') : t('product.favAddShort')}
+          className="absolute top-1.5 right-1.5 z-20 w-10 h-10 rounded-full bg-white/90 hover:bg-white backdrop-blur-xs shadow-sm flex items-center justify-center transition-all active:scale-90"
+        >
+          <Heart className={`w-4 h-4 transition-colors ${isFavorite ? 'text-[#A64B2A] fill-[#A64B2A]' : 'text-[#6E5C51]'}`} />
+        </button>
 
         {/* Volume badge */}
         <div className="absolute bottom-2.5 right-2.5 bg-black/60 backdrop-blur-xs text-white text-[10px] font-medium px-2 py-0.5 rounded-full">
@@ -77,7 +99,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
           <span className="bg-white/90 text-[#2A2421] text-xs font-semibold px-3 py-1.5 rounded-full shadow-sm flex items-center space-x-1.5 backdrop-blur-xs">
             <Eye className="w-3.5 h-3.5" />
-            <span>Подробнее</span>
+            <span>{t('product.details')}</span>
           </span>
         </div>
       </div>
@@ -90,12 +112,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             <span className="text-[11px] font-bold uppercase tracking-wider text-[#8A796F]">
               {product.brand}
             </span>
-            <div className="flex items-center space-x-1 text-[#C9A227]">
-              <Star className="w-3 h-3 fill-[#C9A227]" />
-              <span className="text-[11px] font-semibold text-[#4A3E37]">
-                {product.rating}
-              </span>
-            </div>
+            {hasReviews(product) && (
+              <div className="flex items-center space-x-1 text-[#C9A227]" data-testid="product-rating">
+                <Star className="w-3 h-3 fill-[#C9A227]" />
+                <span className="text-[11px] font-semibold text-[#4A3E37]">
+                  {product.rating}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Product Title */}
@@ -115,7 +139,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             <span className="text-base font-bold text-[#2A2421]">
               {formatPrice(product.price, currency)}
             </span>
-            {product.oldPrice && (
+            {hasOldPrice(product) && (
               <span className="text-xs text-[#A89A90] line-through">
                 {formatPrice(product.oldPrice, currency)}
               </span>
@@ -123,13 +147,36 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           </div>
 
           {/* Add to Cart button or stepper */}
-          {currentQuantity === 0 ? (
+          {!product.inStock ? (
+            <div onClick={(e) => e.stopPropagation()} className="w-full flex items-center gap-2">
+              <button
+                type="button"
+                disabled
+                className="flex-1 min-h-10 flex items-center justify-center bg-[#F3EEEA] text-[#8A796F] py-2 px-3 rounded-xl font-semibold text-xs border border-[#E5DDD4] cursor-not-allowed"
+              >
+                {t('product.outOfStock')}
+              </button>
+              {currentQuantity > 0 && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    updateQuantity(product.id, 0);
+                  }}
+                  aria-label={t('product.removeFromCartAria')}
+                  className="min-h-10 px-3 rounded-xl bg-[#FAF0ED] text-[#A64B2A] text-xs font-semibold border border-[#F0D9D0] active:scale-95"
+                >
+                  {t('common.remove')}
+                </button>
+              )}
+            </div>
+          ) : currentQuantity === 0 ? (
             <button
               onClick={handleAddToCart}
-              className="w-full flex items-center justify-center space-x-2 bg-[#F5EFEB] hover:bg-[#2A2421] text-[#2A2421] hover:text-white py-2 px-3 rounded-xl font-medium text-xs transition-all border border-[#DFD6CD] hover:border-[#2A2421] active:scale-95"
+              className="w-full min-h-10 flex items-center justify-center space-x-2 bg-[#F5EFEB] hover:bg-[#2A2421] text-[#2A2421] hover:text-white py-2 px-3 rounded-xl font-medium text-xs transition-all border border-[#DFD6CD] hover:border-[#2A2421] active:scale-95"
             >
               <ShoppingBag className="w-3.5 h-3.5" />
-              <span>В корзину</span>
+              <span>{t('product.addToCart')}</span>
             </button>
           ) : (
             <div
@@ -138,16 +185,18 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             >
               <button
                 onClick={handleDecrement}
-                className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors active:scale-90"
+                aria-label={t('product.decrease')}
+                className="w-9 h-9 shrink-0 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors active:scale-90"
               >
                 <Minus className="w-3.5 h-3.5" />
               </button>
               <span className="text-xs font-bold px-2">
-                {currentQuantity} шт
+                {t('product.qty', { n: currentQuantity })}
               </span>
               <button
                 onClick={handleIncrement}
-                className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors active:scale-90"
+                aria-label={t('product.increase')}
+                className="w-9 h-9 shrink-0 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors active:scale-90"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>

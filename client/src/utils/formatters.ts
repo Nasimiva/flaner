@@ -1,4 +1,6 @@
-import { Currency } from '../types';
+import type { Currency } from '../types';
+
+type PriceLang = 'ru' | 'uz';
 
 // Exchange rates relative to base UZS
 const RATES: Record<Currency, number> = {
@@ -7,10 +9,11 @@ const RATES: Record<Currency, number> = {
   USD: 1 / 12800, // 1 USD ~ 12,800 UZS
 };
 
-export function formatPrice(amountInUzs: number, currency: Currency = 'UZS'): string {
+export function formatPrice(amountInUzs: number, currency: Currency = 'UZS', lang: PriceLang = 'ru'): string {
+  const sum = lang === 'uz' ? "so'm" : 'сум';
   if (currency === 'UZS') {
     const formatted = Math.round(amountInUzs).toLocaleString('ru-RU');
-    return `${formatted} сум`;
+    return `${formatted} ${sum}`;
   }
 
   if (currency === 'RUB') {
@@ -23,12 +26,7 @@ export function formatPrice(amountInUzs: number, currency: Currency = 'UZS'): st
     return `$${usdAmount}`;
   }
 
-  return `${amountInUzs} сум`;
-}
-
-export function generateOrderNumber(): string {
-  const randomPart = Math.floor(1000 + Math.random() * 9000);
-  return `FL-${randomPart}`;
+  return `${amountInUzs} ${sum}`;
 }
 
 export function formatDate(isoString: string): string {
@@ -43,4 +41,22 @@ export function formatDate(isoString: string): string {
   } catch {
     return isoString;
   }
+}
+
+/** An old price only means something as a discount when it is higher than the current price (0 or equal = no discount). */
+export function hasOldPrice<T extends { price: number; oldPrice?: number | null }>(product: T): product is T & { oldPrice: number } {
+  return typeof product.oldPrice === 'number' && Number.isFinite(product.oldPrice) && product.oldPrice > product.price;
+}
+
+/** The value to store for a product's old price: unset unless it is higher than the price. */
+export function oldPriceToSave(price: number, oldPrice: number): number | undefined {
+  return Number.isFinite(oldPrice) && oldPrice > price ? oldPrice : undefined;
+}
+
+/**
+ * The site has no customer review system, so a rating is shown only when the product carries a real review
+ * count. Products without reviews (reviewsCount 0) show no stars and no "N reviews" line.
+ */
+export function hasReviews<T extends { rating: number; reviewsCount: number }>(product: T): boolean {
+  return Number.isInteger(product.reviewsCount) && product.reviewsCount > 0 && Number.isFinite(product.rating) && product.rating > 0;
 }

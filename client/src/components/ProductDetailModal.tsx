@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { useShop } from '../context/ShopContext';
-import { formatPrice } from '../utils/formatters';
+import { useI18n } from '../i18n/I18nContext';
 import { triggerHaptic } from '../utils/telegram';
-import { X, Star, ShoppingBag, Plus, Minus, Check, Shield, Sparkles, Droplets, Info, Truck } from 'lucide-react';
+import { categoryLabelById } from '../utils/categories';
+import { hasOldPrice, hasReviews } from '../utils/formatters';
+import { ProductImage } from './ProductImage';
+import { X, Star, ShoppingBag, Plus, Minus, Check, Shield, Sparkles, Droplets, Info, Heart } from 'lucide-react';
 
 export const ProductDetailModal: React.FC = () => {
   const {
@@ -10,22 +13,28 @@ export const ProductDetailModal: React.FC = () => {
     closeProductDetail,
     addToCart,
     cart,
-    currency
+    categories,
+    currency,
+    favoriteIds,
+    toggleFavorite
   } = useShop();
 
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [activeTab, setActiveTab] = useState<'desc' | 'composition' | 'usage'>('desc');
   const [quantity, setQuantity] = useState(1);
+  const { t, lang, formatPrice, localizeProduct } = useI18n();
 
   if (!selectedProductForDetail) return null;
 
-  const product = selectedProductForDetail;
+  // Display copy in the current language; the cart always receives the raw catalog item.
+  const product = localizeProduct(selectedProductForDetail);
   const inCartItem = cart.find((item) => item.product.id === product.id);
   const alreadyInCartCount = inCartItem ? inCartItem.quantity : 0;
+  const isFavorite = favoriteIds.includes(product.id);
 
   const handleAdd = () => {
     triggerHaptic('medium');
-    addToCart(product, quantity);
+    addToCart(selectedProductForDetail, quantity);
     closeProductDetail();
   };
 
@@ -46,12 +55,24 @@ export const ProductDetailModal: React.FC = () => {
               {product.volume}
             </span>
           </div>
-          <button
-            onClick={closeProductDetail}
-            className="w-8 h-8 rounded-full bg-[#EFE9E2] hover:bg-[#E2D8CE] flex items-center justify-center text-[#4A3E37] transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => toggleFavorite(product.id)}
+              aria-label={isFavorite ? t('product.favRemove') : t('product.favAdd')}
+              aria-pressed={isFavorite}
+              title={isFavorite ? t('product.favRemove') : t('product.favAddShort')}
+              className="w-10 h-10 rounded-full bg-[#EFE9E2] hover:bg-[#E2D8CE] flex items-center justify-center transition-colors"
+            >
+              <Heart className={`w-4 h-4 ${isFavorite ? 'text-[#A64B2A] fill-[#A64B2A]' : 'text-[#4A3E37]'}`} />
+            </button>
+            <button
+              onClick={closeProductDetail}
+              aria-label={t('common.close')}
+              className="w-10 h-10 rounded-full bg-[#EFE9E2] hover:bg-[#E2D8CE] flex items-center justify-center text-[#4A3E37] transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Scrollable content */}
@@ -59,23 +80,32 @@ export const ProductDetailModal: React.FC = () => {
           {/* Main Photo Gallery */}
           <div className="space-y-3">
             <div className="relative aspect-4/3 w-full rounded-2xl overflow-hidden bg-[#F2ECE5] border border-[#E8DFD6]">
-              <img
+              <ProductImage
                 src={product.images[activeImageIndex] || product.images[0]}
                 alt={product.name}
-                referrerPolicy="no-referrer"
+                brand={product.brand}
                 className="w-full h-full object-cover object-center transition-all duration-300"
               />
 
-              {product.oldPrice && product.oldPrice > product.price && (
+              {hasOldPrice(product) && (
                 <div className="absolute top-3 left-3 bg-[#A64B2A] text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-sm">
-                  Скидка -{Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100)}%
+                  {t('product.discount', { n: Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100) })}
                 </div>
               )}
 
               {/* Status pill */}
               <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-xs text-[#2A2421] text-[11px] font-semibold px-2.5 py-1 rounded-full border border-[#DFD6CD] flex items-center space-x-1">
-                <Check className="w-3 h-3 text-emerald-600" />
-                <span>В наличии ({product.stockCount} шт)</span>
+                {product.inStock ? (
+                  <>
+                    <Check className="w-3 h-3 text-emerald-600" />
+                    <span>{t('product.inStock')}</span>
+                  </>
+                ) : (
+                  <>
+                    <X className="w-3 h-3 text-[#A64B2A]" />
+                    <span>{t('product.outOfStock')}</span>
+                  </>
+                )}
               </div>
             </div>
 
@@ -111,17 +141,15 @@ export const ProductDetailModal: React.FC = () => {
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-xs uppercase tracking-wider font-semibold text-[#8A796F]">
-                {product.category === 'face-care'
-                  ? 'Уход за лицом'
-                  : product.category === 'makeup'
-                  ? 'Декоративная косметика'
-                  : 'Парфюмерия'}
+                {categoryLabelById(categories, product.category, lang)}
               </span>
-              <div className="flex items-center space-x-1 bg-[#F5EFEB] px-2 py-0.5 rounded-full text-xs">
-                <Star className="w-3.5 h-3.5 fill-[#C9A227] text-[#C9A227]" />
-                <span className="font-bold text-[#2A2421]">{product.rating}</span>
-                <span className="text-[#8A796F]">({product.reviewsCount} отзывов)</span>
-              </div>
+              {hasReviews(product) && (
+                <div className="flex items-center space-x-1 bg-[#F5EFEB] px-2 py-0.5 rounded-full text-xs" data-testid="product-rating">
+                  <Star className="w-3.5 h-3.5 fill-[#C9A227] text-[#C9A227]" />
+                  <span className="font-bold text-[#2A2421]">{product.rating}</span>
+                  <span className="text-[#8A796F]">{t('product.reviews', { n: product.reviewsCount })}</span>
+                </div>
+              )}
             </div>
 
             <h2 className="text-xl font-bold text-[#2A2421] leading-snug">
@@ -133,7 +161,7 @@ export const ProductDetailModal: React.FC = () => {
               <span className="text-2xl font-bold text-[#2A2421]">
                 {formatPrice(product.price, currency)}
               </span>
-              {product.oldPrice && (
+              {hasOldPrice(product) && (
                 <span className="text-sm text-[#A89A90] line-through">
                   {formatPrice(product.oldPrice, currency)}
                 </span>
@@ -146,12 +174,6 @@ export const ProductDetailModal: React.FC = () => {
                 <span>{product.skinType}</span>
               </div>
             )}
-
-            {/* Free shipping perk badge */}
-            <div className="mt-2 text-xs text-[#5C4515] bg-[#FAF5E8] border border-[#E8DCBF] px-3 py-1.5 rounded-xl inline-flex items-center space-x-1.5">
-              <Truck className="w-3.5 h-3.5 text-[#C9A227] shrink-0" />
-              <span>Бесплатная доставка от <strong className="font-bold text-[#2A2421]">2 000 000 сум</strong></span>
-            </div>
           </div>
 
           {/* Tabs Navigation: Описание, Состав, Применение */}
@@ -166,19 +188,21 @@ export const ProductDetailModal: React.FC = () => {
                 }`}
               >
                 <Info className="w-3.5 h-3.5" />
-                <span>Описание</span>
+                <span>{t('product.tabDesc')}</span>
               </button>
-              <button
-                onClick={() => setActiveTab('composition')}
-                className={`pb-2.5 px-3 border-b-2 transition-all flex items-center space-x-1.5 ${
-                  activeTab === 'composition'
-                    ? 'border-[#2A2421] text-[#2A2421]'
-                    : 'border-transparent text-[#8A796F] hover:text-[#2A2421]'
-                }`}
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Состав (INCI)</span>
-              </button>
+              {product.composition.trim() && (
+                <button
+                  onClick={() => setActiveTab('composition')}
+                  className={`pb-2.5 px-3 border-b-2 transition-all flex items-center space-x-1.5 ${
+                    activeTab === 'composition'
+                      ? 'border-[#2A2421] text-[#2A2421]'
+                      : 'border-transparent text-[#8A796F] hover:text-[#2A2421]'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>{t('product.tabComposition')}</span>
+                </button>
+              )}
               {product.howToUse && (
                 <button
                   onClick={() => setActiveTab('usage')}
@@ -189,7 +213,7 @@ export const ProductDetailModal: React.FC = () => {
                   }`}
                 >
                   <Droplets className="w-3.5 h-3.5" />
-                  <span>Применение</span>
+                  <span>{t('product.tabUsage')}</span>
                 </button>
               )}
             </div>
@@ -209,7 +233,7 @@ export const ProductDetailModal: React.FC = () => {
                   </div>
                   <p className="text-[11px] text-[#8A796F] flex items-center space-x-1">
                     <Shield className="w-3 h-3 text-emerald-600" />
-                    <span>Оригинальная сертифицированная продукция с маркировкой</span>
+                    <span>{t('product.certified')}</span>
                   </p>
                 </div>
               )}
@@ -225,6 +249,16 @@ export const ProductDetailModal: React.FC = () => {
 
         {/* Bottom Actions Bar (Telegram Web App friendly) */}
         <div className="p-4 bg-white border-t border-[#EAE3DC] flex items-center space-x-3">
+          {!product.inStock ? (
+            <button
+              type="button"
+              disabled
+              className="flex-1 min-h-12 bg-[#F3EEEA] text-[#8A796F] py-3.5 px-4 rounded-2xl font-semibold text-sm border border-[#E5DDD4] cursor-not-allowed"
+            >
+              {t('product.outOfStock')}
+            </button>
+          ) : (
+            <>
           {/* Quantity Selector */}
           <div className="flex items-center bg-[#F3ECE5] rounded-2xl p-1 border border-[#DFD6CD]">
             <button
@@ -232,7 +266,7 @@ export const ProductDetailModal: React.FC = () => {
                 triggerHaptic('selection');
                 setQuantity(Math.max(1, quantity - 1));
               }}
-              className="w-8 h-8 rounded-xl bg-white hover:bg-[#EBE3DB] flex items-center justify-center text-[#2A2421] transition-colors"
+              className="w-10 h-10 rounded-xl bg-white hover:bg-[#EBE3DB] flex items-center justify-center text-[#2A2421] transition-colors"
             >
               <Minus className="w-3.5 h-3.5" />
             </button>
@@ -244,7 +278,7 @@ export const ProductDetailModal: React.FC = () => {
                 triggerHaptic('selection');
                 setQuantity(quantity + 1);
               }}
-              className="w-8 h-8 rounded-xl bg-white hover:bg-[#EBE3DB] flex items-center justify-center text-[#2A2421] transition-colors"
+              className="w-10 h-10 rounded-xl bg-white hover:bg-[#EBE3DB] flex items-center justify-center text-[#2A2421] transition-colors"
             >
               <Plus className="w-3.5 h-3.5" />
             </button>
@@ -257,14 +291,16 @@ export const ProductDetailModal: React.FC = () => {
           >
             <ShoppingBag className="w-4 h-4 text-[#E8DDD4]" />
             <span>
-              В корзину • {formatPrice(product.price * quantity, currency)}
+              {t('product.addWithTotal', { price: formatPrice(product.price * quantity, currency) })}
             </span>
           </button>
+            </>
+          )}
         </div>
 
         {alreadyInCartCount > 0 && (
           <div className="bg-[#EFE9E2] text-[#6E5C51] text-[11px] py-1 text-center font-medium">
-            Уже в корзине: {alreadyInCartCount} шт
+            {t('product.alreadyInCart', { n: alreadyInCartCount })}
           </div>
         )}
       </div>

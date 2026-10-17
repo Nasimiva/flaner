@@ -5,9 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "tsx src/server.ts",
-    "build": "esbuild src/server.ts src/db/migrate.ts src/db/seed.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outdir=dist --out-extension:.js=.cjs",
+    "build": "npm --prefix ../client ci && npm --prefix ../client run build && npm run build:server",
+    "build:server": "esbuild src/server.ts src/db/migrate.ts src/db/seed.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outdir=dist --out-extension:.js=.cjs",
     "start": "node dist/db/migrate.cjs && node dist/db/seed.cjs && node dist/server.cjs",
     "lint": "tsc --noEmit",
+    "pretest": "npm --prefix test ci --no-audit --no-fund",
+    "test": "node --import tsx --test --test-force-exit --test-timeout=60000 test/*.test.ts",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:seed": "tsx src/db/seed.ts"
   },
@@ -15,7 +18,9 @@
     "@google/genai": "^2.4.0",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
-    "pg": "^8.23.0"
+    "express-rate-limit": "^8.7.0",
+    "pg": "^8.23.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",

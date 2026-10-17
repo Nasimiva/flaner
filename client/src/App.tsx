@@ -1,22 +1,27 @@
 import React from 'react';
 import { ShopProvider, useShop } from './context/ShopContext';
+import { I18nProvider, useI18n } from './i18n/I18nContext';
 import { Header } from './components/Header';
 import { CategoryNav } from './components/CategoryNav';
 import { ProductCard } from './components/ProductCard';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { CartDrawer } from './components/CartDrawer';
-import { CheckoutModal } from './components/CheckoutModal';
+import { LeadModal } from './components/LeadModal';
+import { FavoritesDrawer } from './components/FavoritesDrawer';
 import { AdminAccess } from './components/AdminAccess';
 import { TelegramFrame } from './components/TelegramFrame';
 import { ShareModal } from './components/ShareModal';
-import { formatPrice } from './utils/formatters';
+import { HeroSlider } from './components/HeroSlider';
+import { BrandMarquee } from './components/BrandMarquee';
+import { useSiteContent } from './utils/useSiteContent';
+import { triggerHaptic } from './utils/telegram';
+import { categoryLabelById, inCategory, resolveBannerCategory } from './utils/categories';
+import { catalogBrands, isSameBrand, matchesBrand } from './utils/brands';
 import {
-  Sparkles,
   ShoppingBag,
   ArrowRight,
   ShieldCheck,
-  Truck,
-  CreditCard,
+  PhoneCall,
   Heart,
   CheckCircle,
   AlertCircle,
@@ -26,8 +31,11 @@ import {
 const ShopContent: React.FC = () => {
   const {
     products,
+    categories,
     selectedCategory,
     selectedBrand,
+    setSelectedBrand,
+    setSelectedCategory,
     searchQuery,
     sortBy,
     cart,
@@ -36,31 +44,98 @@ const ShopContent: React.FC = () => {
     currency,
     isShareOpen,
     setIsShareOpen,
+    isCartOpen,
+    isLeadFormOpen,
+    isFavoritesOpen,
+    selectedProductForDetail,
     toast
   } = useShop();
+  const { lang, t, formatPrice, localizeProduct, localizeBanners } = useI18n();
+
+  // While a dialog is open the toast moves to the very top edge so it never covers the dialog's header or form fields.
+  const dialogOpen = isCartOpen || isLeadFormOpen || isFavoritesOpen || isShareOpen || selectedProductForDetail !== null;
+
+  // Banners and brands are editable in the admin panel; reload them whenever the admin panel is closed.
+  const siteContent = useSiteContent(isAdminOpen);
+
+  // The carousel shows the brands chosen in the admin panel first, then every other brand of the catalog, so each
+  // product can be reached from it. Spelling variants of one brand appear once.
+  const marqueeBrands = React.useMemo(() => {
+    const listed = siteContent.brands;
+    const extra = catalogBrands(products)
+      .filter((name) => !listed.some((brand) => isSameBrand(brand.name, name) || matchesBrand({ brand: name }, brand.name)))
+      .map((name) => ({ id: `catalog-${name}`, name, logoUrl: '' }));
+    return [...listed, ...extra];
+  }, [siteContent.brands, products]);
+
+  // Rendered in the storefront and in the admin panel, so validation and save errors are visible in both.
+  const toastView = toast && (
+    <div
+      role="status"
+      aria-live="polite"
+      className={`fixed ${dialogOpen ? 'top-2' : 'top-14'} left-1/2 -translate-x-1/2 z-[70] w-max max-w-[calc(100vw-1.5rem)] pointer-events-none animate-slide-up`}
+    >
+      <div
+        className={`px-4 py-2.5 rounded-2xl shadow-xl text-xs font-semibold flex items-center space-x-2 border ${
+          toast.type === 'error'
+            ? 'bg-rose-900 text-white border-rose-700'
+            : toast.type === 'info'
+            ? 'bg-[#2A2421] text-white border-[#443831]'
+            : 'bg-[#2A2421] text-white border-[#C9A227]/40'
+        }`}
+      >
+        {toast.type === 'error' ? (
+          <AlertCircle className="w-4 h-4 text-rose-300" />
+        ) : (
+          <CheckCircle className="w-4 h-4 text-[#C9A227]" />
+        )}
+        <span className="line-clamp-2">{toast.message}</span>
+      </div>
+    </div>
+  );
 
   if (isAdminOpen) {
-    return <AdminAccess />;
+    return (
+      <>
+        <AdminAccess />
+        {toastView}
+      </>
+    );
   }
+
+  const scrollToCatalog = () => {
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    document.getElementById('catalog')?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+  };
+
+  const handleBannerCategory = (category: string) => {
+    setSelectedBrand('all');
+    setSelectedCategory(resolveBannerCategory(category, categories, products));
+    scrollToCatalog();
+  };
+
+  const handleBrandSelect = (name: string) => {
+    triggerHaptic('selection');
+    const alreadySelected = isSameBrand(selectedBrand, name);
+    setSelectedCategory('brands');
+    setSelectedBrand(alreadySelected ? 'all' : name);
+    if (!alreadySelected) scrollToCatalog();
+  };
 
   // Filter products
   const filteredProducts = products.filter((product) => {
     // Category filter
-    if (selectedCategory !== 'all' && selectedCategory !== 'brands') {
-      if (product.category !== selectedCategory) return false;
-    }
+    if (!inCategory(product, selectedCategory)) return false;
 
     // Brand filter
-    if (selectedBrand !== 'all') {
-      if (product.brand.toLowerCase() !== selectedBrand.toLowerCase()) return false;
-    }
+    if (!matchesBrand(product, selectedBrand)) return false;
 
     // Search query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const matchName = product.name.toLowerCase().includes(q);
       const matchBrand = product.brand.toLowerCase().includes(q);
-      const matchDesc = product.description.toLowerCase().includes(q);
+      const matchDesc = localizeProduct(product).description.toLowerCase().includes(q);
       const matchComposition = product.composition.toLowerCase().includes(q);
       if (!matchName && !matchBrand && !matchDesc && !matchComposition) return false;
     }
@@ -91,42 +166,36 @@ const ShopContent: React.FC = () => {
 
           {/* Main Container */}
           <main className="max-w-6xl mx-auto px-4 sm:px-6 py-4 space-y-6">
-            {/* Elegant Boutique Banner */}
-            <div className="relative overflow-hidden rounded-3xl bg-linear-to-r from-[#2A2421] via-[#382F2B] to-[#2A2421] text-white p-5 sm:p-7 shadow-sm border border-[#443831]">
-              <div className="absolute right-0 top-0 w-64 h-64 bg-[#C9A227]/10 rounded-full blur-3xl pointer-events-none"></div>
+            {/* The page keeps exactly one h1 (slide titles are h2). */}
+            <h1 className="sr-only">{t('home.h1')}</h1>
 
-              <div className="relative z-10 max-w-xl space-y-2.5">
-                <div className="inline-flex items-center space-x-1.5 bg-white/10 backdrop-blur-xs px-2.5 py-1 rounded-full text-[11px] font-medium text-[#E8DDD4]">
-                  <Sparkles className="w-3 h-3 text-[#C9A227]" />
-                  <span>Официальный бутик в Telegram</span>
-                </div>
+            <HeroSlider banners={localizeBanners(siteContent.banners)} ready={siteContent.ready} onCategory={handleBannerCategory} />
 
-                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white leading-tight">
-                  Селективная косметика & нишевая парфюмерия
-                </h1>
+            <ul className="flex flex-wrap gap-x-6 gap-y-1.5 text-xs text-[#6E5C51] -mt-2">
+              <li className="flex items-center space-x-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-[#6E4F3E]" />
+                <span>{t('home.original')}</span>
+              </li>
+              <li className="flex items-center space-x-1.5">
+                <PhoneCall className="w-3.5 h-3.5 text-[#6E4F3E]" />
+                <span>{t('home.noPayment')}</span>
+              </li>
+            </ul>
 
-                <p className="text-xs sm:text-sm text-[#D3C7BD] leading-relaxed">
-                  Оригинальная продукция ведущих мировых домов красоты с моментальной оплатой через Telegram Payments, Payme, Click и Stripe.
-                </p>
-
-                {/* Highlights bar */}
-                <div className="pt-2 flex flex-wrap gap-2 text-[11px] text-[#E8DDD4]">
-                  <span className="flex items-center space-x-1 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full">
-                    <ShieldCheck className="w-3 h-3 text-[#C9A227]" />
-                    <span>100% Оригинал</span>
-                  </span>
-                  <span className="flex items-center space-x-1 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full">
-                    <Truck className="w-3 h-3 text-[#C9A227]" />
-                    <span>Бесплатная доставка от 2 000 000 сум</span>
-                  </span>
-                  <span className="flex items-center space-x-1 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full">
-                    <CreditCard className="w-3 h-3 text-[#C9A227]" />
-                    <span>Payme / Click / Telegram</span>
-                  </span>
-                </div>
+            {/* Brand strip: names move in a seamless loop; a tap filters the catalog by brand. */}
+            <section aria-labelledby="brands-heading" className="pt-8 pb-2">
+              <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-1 mb-4">
+                <h2 id="brands-heading" className="font-serif text-3xl sm:text-4xl font-medium tracking-[-0.01em] text-[#221D1A]">
+                  {t('brands.title')}
+                </h2>
+                <p className="text-xs text-[#8A796F]">{t('brands.hint')}</p>
               </div>
-            </div>
+              <div className="border-y border-[#E4DBD1]">
+                <BrandMarquee brands={marqueeBrands} selectedBrand={selectedBrand} onSelect={handleBrandSelect} />
+              </div>
+            </section>
 
+            <div id="catalog" className="scroll-mt-36 space-y-6">
             {/* Category Navigation & Search */}
             <CategoryNav />
 
@@ -134,19 +203,15 @@ const ShopContent: React.FC = () => {
             <section className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-lg sm:text-xl font-bold text-[#2A2421]">
-                    {selectedCategory === 'face-care'
-                      ? 'Уход за лицом'
-                      : selectedCategory === 'makeup'
-                      ? 'Декоративная косметика'
-                      : selectedCategory === 'perfume'
-                      ? 'Парфюмерия'
+                  <h2 className="font-serif text-2xl sm:text-3xl font-medium tracking-[-0.01em] text-[#221D1A]">
+                    {selectedCategory === 'all'
+                      ? t('catalog.title')
                       : selectedCategory === 'brands'
-                      ? selectedBrand !== 'all' ? `Бренд: ${selectedBrand}` : 'Все бренды'
-                      : 'Каталог продукции'}
+                      ? selectedBrand !== 'all' ? t('catalog.brandTitle', { brand: selectedBrand }) : t('catalog.allBrands')
+                      : categoryLabelById(categories, selectedCategory, lang)}
                   </h2>
                   <p className="text-xs text-[#8A796F]">
-                    Найдено: {sortedProducts.length} позиций
+                    {t('catalog.found', { n: sortedProducts.length })}
                   </p>
                 </div>
               </div>
@@ -158,10 +223,10 @@ const ShopContent: React.FC = () => {
                     <ShoppingBag className="w-8 h-8" />
                   </div>
                   <h3 className="text-base font-bold text-[#2A2421]">
-                    Товары не найдены
+                    {t('catalog.emptyTitle')}
                   </h3>
                   <p className="text-xs text-[#8A796F] max-w-sm mx-auto">
-                    К сожалению, по вашему запросу ничего не нашлось. Попробуйте сбросить фильтры или ввести другое название.
+                    {t('catalog.emptyText')}
                   </p>
                 </div>
               ) : (
@@ -172,6 +237,7 @@ const ShopContent: React.FC = () => {
                 </div>
               )}
             </section>
+            </div>
           </main>
         </div>
 
@@ -184,33 +250,21 @@ const ShopContent: React.FC = () => {
                   FLANER COSMETICS
                 </span>
                 <span className="text-[11px] text-[#8A796F]">
-                  Бутик селективной косметики и нишевой парфюмерии в Telegram (@flaneruz_bot)
+                  {t('footer.tagline')}
                 </span>
               </div>
 
-              {/* Supported Payment Badges */}
-              <div className="flex flex-wrap items-center justify-center gap-1.5">
-                <span className="px-2.5 py-1 rounded-md bg-[#2B5278]/10 text-[#2B5278] font-bold text-[10px]">
-                  Telegram Payments
-                </span>
-                <span className="px-2.5 py-1 rounded-md bg-[#19C5B2]/10 text-[#0E7A6E] font-bold text-[10px]">
-                  Payme
-                </span>
-                <span className="px-2.5 py-1 rounded-md bg-[#0089D0]/10 text-[#006BB3] font-bold text-[10px]">
-                  Click
-                </span>
-                <span className="px-2.5 py-1 rounded-md bg-[#635BFF]/10 text-[#4B45C6] font-bold text-[10px]">
-                  Stripe
-                </span>
-              </div>
+              <span className="px-3 py-1.5 rounded-md bg-[#FAF5E8] text-[#5C4515] font-semibold text-[11px] border border-[#E8DCBF]">
+                {t('footer.badge')}
+              </span>
             </div>
 
             <div className="pt-4 border-t border-[#F2ECE5] flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-[#A89A90]">
-              <span>© {new Date().getFullYear()} flaner_cosmetics (@flaneruz_bot). Все права защищены.</span>
+              <span>{t('footer.rights', { year: new Date().getFullYear() })}</span>
               <div className="flex space-x-4">
-                <span>Узбекистан, г. Ташкент</span>
+                <span>{t('footer.city')}</span>
                 <span>•</span>
-                <span>Бот магазина: @flaneruz_bot</span>
+                <span>{t('footer.bot')}</span>
               </div>
             </div>
           </div>
@@ -227,7 +281,7 @@ const ShopContent: React.FC = () => {
                 <span className="bg-[#C9A227] text-white text-xs px-2 py-0.5 rounded-full font-bold">
                   {cartItemsCount}
                 </span>
-                <span>Корзина</span>
+                <span>{t('cartBar.cart')}</span>
               </div>
 
               <div className="flex items-center space-x-2">
@@ -241,30 +295,11 @@ const ShopContent: React.FC = () => {
         {/* Modals */}
         <ProductDetailModal />
         <CartDrawer />
-        <CheckoutModal />
+        <LeadModal />
+        <FavoritesDrawer />
         <ShareModal isOpen={isShareOpen} onClose={() => setIsShareOpen(false)} />
 
-        {/* Global Toast Notification */}
-        {toast && (
-          <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 animate-slide-up">
-            <div
-              className={`px-4 py-2.5 rounded-2xl shadow-xl text-xs font-semibold flex items-center space-x-2 border ${
-                toast.type === 'error'
-                  ? 'bg-rose-900 text-white border-rose-700'
-                  : toast.type === 'info'
-                  ? 'bg-[#2A2421] text-white border-[#443831]'
-                  : 'bg-[#2A2421] text-white border-[#C9A227]/40'
-              }`}
-            >
-              {toast.type === 'error' ? (
-                <AlertCircle className="w-4 h-4 text-rose-300" />
-              ) : (
-                <CheckCircle className="w-4 h-4 text-[#C9A227]" />
-              )}
-              <span>{toast.message}</span>
-            </div>
-          </div>
-        )}
+        {toastView}
       </div>
     </TelegramFrame>
   );
@@ -272,8 +307,10 @@ const ShopContent: React.FC = () => {
 
 export default function App() {
   return (
-    <ShopProvider>
-      <ShopContent />
-    </ShopProvider>
+    <I18nProvider>
+      <ShopProvider>
+        <ShopContent />
+      </ShopProvider>
+    </I18nProvider>
   );
 }

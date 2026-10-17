@@ -3,6 +3,14 @@ import path from 'path';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { createProductRoutes } from './productRoutes.js';
+import { pool } from './db/pool.js';
+import { errorMiddleware } from './http/errors.js';
+import { logger } from './logger.js';
+import { createLeadRouters } from './modules/leads/leadRoutes.js';
+import { formatLeadMessage } from './modules/leads/leadNotification.js';
+import { createSiteContentRouters } from './modules/siteContent/siteContentRoutes.js';
+import { createCategoryRouters } from './modules/categories/categoryRoutes.js';
+import { createInventoryRouter } from './modules/inventory/inventoryRoutes.js';
 
 dotenv.config();
 
@@ -10,6 +18,8 @@ const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 
 app.disable('x-powered-by');
+// Render terminates TLS at its proxy. Trust its forwarded client IP for rate limits.
+if (process.env.NODE_ENV === 'production') app.set('trust proxy', 1);
 app.use(express.json({ limit: '100kb' }));
 
 // CORS: allow requests from the Vite dev server in development
@@ -18,7 +28,10 @@ app.use((req, res, next) => {
   const allowedOrigins = new Set(
     (process.env.CORS_ORIGINS || '').split(',').map((value) => value.trim()).filter(Boolean)
   );
-  const originAllowed = process.env.NODE_ENV !== 'production' || (origin && allowedOrigins.has(origin));
+  const devOrigin = origin === 'http://localhost:5173' || origin === 'http://127.0.0.1:5173';
+  const originAllowed = process.env.NODE_ENV === 'production'
+    ? Boolean(origin && allowedOrigins.has(origin))
+    : !origin || devOrigin || allowedOrigins.has(origin);
   if (origin && originAllowed) {
     res.vary('Origin');
     res.header('Access-Control-Allow-Origin', origin);
@@ -30,6 +43,8 @@ app.use((req, res, next) => {
   res.header('X-Frame-Options', 'SAMEORIGIN');
   res.header('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  // API responses are not pages: keep them out of search indexes.
+  if (req.path.startsWith('/api/')) res.header('X-Robots-Tag', 'noindex, nofollow');
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
@@ -126,10 +141,91 @@ async function sendTelegramMessage(chatId: string | number, text: string, parseM
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', name: 'flaner_cosmetics' });
+  // Keep health useful for Render while confirming that the app can reach its database.
+  import('./db/pool.js').then(({ pool }) => pool.query('SELECT 1')).then(
+    () => res.json({ status: 'ok', database: 'connected', name: 'flaner_cosmetics' }),
+    (error: unknown) => {
+      console.error('Health check database query failed:', error);
+      res.status(503).json({ status: 'error', database: 'unavailable', name: 'flaner_cosmetics' });
+    }
+  );
 });
 
 app.use('/api/products', createProductRoutes(requireAdmin));
+
+// Leads (call-back requests). The shopper endpoint is public and rate limited; the rest need an admin session.
+function positiveInt(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+const leadRouters = createLeadRouters({
+  pool,
+  botToken: TELEGRAM_BOT_TOKEN,
+  initDataMaxAgeSeconds: positiveInt(process.env.TELEGRAM_INIT_DATA_MAX_AGE_SECONDS, 24 * 60 * 60),
+  rateLimit: {
+    windowMs: positiveInt(process.env.LEADS_RATE_LIMIT_WINDOW_MINUTES, 15) * 60 * 1000,
+    max: positiveInt(process.env.LEADS_RATE_LIMIT_MAX, 10)
+  },
+  notifyLeadCreated: async (lead) => {
+    const snippet = `Заявка ${lead.leadNumber} (${lead.itemsTotal} UZS)`;
+    if (!TELEGRAM_BOT_TOKEN || !configuredAdminChatId) {
+      logger.warn('Lead notification skipped: Telegram bot token or admin chat id is not configured', { leadNumber: lead.leadNumber });
+      return;
+    }
+    try {
+      await sendTelegramMessage(configuredAdminChatId, formatLeadMessage(lead));
+      telegramLogs.unshift({ id: `log-${Date.now()}`, timestamp: new Date().toISOString(), type: 'order', recipient: configuredAdminChatId, status: 'sent', textSnippet: snippet });
+    } catch (error) {
+      telegramLogs.unshift({ id: `log-${Date.now()}`, timestamp: new Date().toISOString(), type: 'order', recipient: configuredAdminChatId, status: 'failed', error: error instanceof Error ? error.message : 'unknown error', textSnippet: snippet });
+      throw error;
+    }
+  }
+});
+app.use('/api/leads', leadRouters.publicRouter);
+app.use('/api/admin/leads', requireAdmin, leadRouters.adminRouter);
+
+// Editable storefront content (hero banners, brand strip). Public read, admin write.
+const siteContentRouters = createSiteContentRouters(pool);
+app.use('/api/site-content', siteContentRouters.publicRouter);
+app.use('/api/admin/site-content', requireAdmin, siteContentRouters.adminRouter);
+
+// Product categories. Public read for the storefront, admin write.
+const categoryRouters = createCategoryRouters(pool);
+app.use('/api/categories', categoryRouters.publicRouter);
+app.use('/api/admin/categories', requireAdmin, categoryRouters.adminRouter);
+
+// Stock, sales, cost price and reports. Admin only; nothing from here may appear in the public API.
+app.use('/api/admin/inventory', requireAdmin, createInventoryRouter(pool));
+
+// There is no public order endpoint: shoppers send a lead (POST /api/leads), which reserves nothing. Stock changes only
+// through the admin inventory API (sales, receipts, recounts), so no anonymous request can ever move it.
+// Legacy orders already stored in PostgreSQL stay readable by the admin below.
+app.get('/api/orders', requireAdmin, async (_req, res) => {
+  try {
+    const result = await pool.query('SELECT payload FROM orders ORDER BY created_at DESC');
+    res.json(result.rows.map((row) => row.payload));
+  } catch (error) {
+    console.error('Could not load orders:', error);
+    res.status(503).json({ error: 'Orders are temporarily unavailable' });
+  }
+});
+
+app.patch('/api/orders/:id/status', requireAdmin, async (req, res) => {
+  const allowed = new Set(['new', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']);
+  if (!allowed.has(req.body?.status)) return res.status(400).json({ error: 'Invalid order status' });
+  try {
+    const result = await pool.query(
+      `UPDATE orders SET payload = jsonb_set(payload, '{status}', to_jsonb($2::text)), updated_at=NOW() WHERE id=$1 RETURNING payload`,
+      [req.params.id, req.body.status]
+    );
+    if (!result.rowCount) return res.status(404).json({ error: 'Order not found' });
+    res.json(result.rows[0].payload);
+  } catch (error) {
+    console.error('Could not update order:', error);
+    res.status(503).json({ error: 'Could not update order status' });
+  }
+});
 
 app.get('/api/admin/session', (req, res) => {
   const session = verifySession(getCookie(req, SESSION_COOKIE));
@@ -148,14 +244,6 @@ const configured = Boolean(
   ADMIN_SESSION_SECRET &&
   ADMIN_EMAIL_ALLOWLIST.size
 );
-
-console.log('Login debug:', {
-  email,
-  codeLength: code.length,
-  configured,
-  emailAllowed: ADMIN_EMAIL_ALLOWLIST.has(email),
-  envCodeLength: ADMIN_ACCESS_CODE.length,
-});
 
 const matchesCode =
   configured &&
@@ -253,12 +341,17 @@ app.post('/api/telegram/admin-chat', requireAdmin, (req, res) => {
 });
 
 // Send new order alert to Telegram
-app.post('/api/telegram/send-order', async (req, res) => {
+// Admin only: it sends messages through the shop's bot, so an anonymous caller must not be able to trigger it.
+app.post('/api/telegram/send-order', requireAdmin, async (req, res) => {
   try {
-    const { order, customerChatId } = req.body;
-    if (!order || !order.orderNumber) {
+    const { customerChatId } = req.body;
+    const orderId = req.body?.order?.id;
+    if (typeof orderId !== 'string') {
       return res.status(400).json({ error: 'Order data is required' });
     }
+    const savedOrder = await pool.query('SELECT payload FROM orders WHERE id=$1', [orderId]);
+    if (!savedOrder.rowCount) return res.status(404).json({ error: 'Order not found' });
+    const order = savedOrder.rows[0].payload;
 
     const deliveryMap: Record<string, string> = {
       courier: 'Курьерская доставка (Узбекистан, г. Ташкент)',
@@ -440,9 +533,19 @@ if (process.env.NODE_ENV === 'production') {
 const clientDist = path.resolve(process.cwd(), '../client/dist');
   app.use(express.static(clientDist));
   app.get('*', (req, res) => {
-    res.sendFile(path.join(clientDist, 'index.html'));
+    if (req.path.startsWith('/api/')) return res.status(404).json({ error: 'API endpoint not found' });
+    // The storefront is a single-page app served at "/". Any other path (including a missing
+    // robots.txt/sitemap.xml/asset) must not answer 200 with the app shell: that is a soft 404 for crawlers.
+    if (req.path === '/' || req.path === '/index.html') {
+      return res.sendFile(path.join(clientDist, 'index.html'));
+    }
+    if (path.extname(req.path)) return res.status(404).type('text/plain').send('Not found');
+    res.status(404).header('X-Robots-Tag', 'noindex').sendFile(path.join(clientDist, 'index.html'));
   });
 }
+
+// Must stay after every route: turns validation, HttpError and JSON-parse failures into JSON responses.
+app.use(errorMiddleware);
 
 // ======================== START ========================
 

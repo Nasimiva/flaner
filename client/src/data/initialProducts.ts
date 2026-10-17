@@ -14,7 +14,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     volume: '50 мл',
     images: [
       'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1608248597359-247f078a6ff6?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?auto=format&fit=crop&w=800&q=80',
       'https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?auto=format&fit=crop&w=800&q=80'
     ],
     description: 'Легендарная ночная восстанавливающая сыворотка нового поколения с технологией Chronolux Power Signal. Глубоко увлажняет на 72 часа, разглаживает мимические морщинки и придает сияние коже уже после первого применения.',
@@ -22,7 +22,6 @@ export const INITIAL_PRODUCTS: Product[] = [
     howToUse: 'Наносите утром и вечером на предварительно очищенную кожу лица и шеи перед нанесением увлажняющего крема.',
     skinType: 'Для всех типов кожи, включая чувствительную',
     inStock: true,
-    stockCount: 18,
     isBestseller: true
   },
   {
@@ -36,7 +35,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     reviewsCount: 310,
     volume: '30 мл',
     images: [
-      'https://images.unsplash.com/photo-1608248597359-247f078a6ff6?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1617897903246-719242758050?auto=format&fit=crop&w=800&q=80',
       'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=800&q=80'
     ],
     description: 'Концентрированная сыворотка на водной основе с тремя формами гиалуроновой кислоты разной молекулярной массы и витамином B5. Обеспечивает многоуровневое увлажнение и укрепляет защитный барьер.',
@@ -44,7 +43,6 @@ export const INITIAL_PRODUCTS: Product[] = [
     howToUse: 'Несколько капель нанесите на лицо утром и вечером перед кремами на слегка влажную кожу.',
     skinType: 'Сухая, обезвоженная, нормальная кожа',
     inStock: true,
-    stockCount: 35,
     isBestseller: true
   },
   {
@@ -66,7 +64,6 @@ export const INITIAL_PRODUCTS: Product[] = [
     howToUse: 'Используйте 2-3 раза в неделю вечером на последнем этапе ухода вместо крема. Смойте теплой водой утром.',
     skinType: 'Тусклая, уставшая, обезвоженная кожа',
     inStock: true,
-    stockCount: 22,
     isNew: true
   },
   {
@@ -88,7 +85,6 @@ export const INITIAL_PRODUCTS: Product[] = [
     howToUse: 'После умывания и тонизирования нанесите небольшое количество эссенции на все лицо мягкими похлопывающими движениями.',
     skinType: 'Проблемная, чувствительная, комбинированная',
     inStock: true,
-    stockCount: 14,
     isBestseller: true
   },
 
@@ -113,7 +109,6 @@ export const INITIAL_PRODUCTS: Product[] = [
     howToUse: 'Наносите самостоятельно для естественного сияющего эффекта или используйте в качестве праймера под помаду.',
     skinType: 'Для всех типов губ',
     inStock: true,
-    stockCount: 12,
     isBestseller: true
   },
   {
@@ -135,7 +130,6 @@ export const INITIAL_PRODUCTS: Product[] = [
     howToUse: 'Наносите непосредственно на губы от центра к уголкам. Для идеального контура используйте карандаш для губ.',
     skinType: 'Любой тип',
     inStock: true,
-    stockCount: 9,
     isBestseller: true
   },
   {
@@ -157,7 +151,6 @@ export const INITIAL_PRODUCTS: Product[] = [
     howToUse: 'Нажмите на кнопку аппликатора, нанесите на зону вокруг глаз, скулы и спинку носа, растушуйте подушечками пальцев.',
     skinType: 'Все типы кожи',
     inStock: true,
-    stockCount: 16
   },
   {
     id: 'prod-8',
@@ -178,7 +171,6 @@ export const INITIAL_PRODUCTS: Product[] = [
     howToUse: 'Наносите кистью или пальцами на впадины скул, виски и линию челюсти, растушевывая круговыми движениями вверх.',
     skinType: 'Все типы кожи',
     inStock: true,
-    stockCount: 6,
     isNew: true
   },
 
@@ -203,7 +195,6 @@ export const INITIAL_PRODUCTS: Product[] = [
     howToUse: 'Распыляйте на точки пульса: запястья, шею, за ушами и в зону декольте на расстоянии 15-20 см.',
     skinType: 'Унисекс парфюм премиум класса',
     inStock: true,
-    stockCount: 8,
     isBestseller: true
   },
   {
@@ -225,7 +216,6 @@ export const INITIAL_PRODUCTS: Product[] = [
     howToUse: 'Наносите на чистую кожу или волосы. Прекрасно сочетается в технике Fragrance Combining с другими одеколонами Jo Malone.',
     skinType: 'Унисекс одеколон',
     inStock: true,
-    stockCount: 15
   },
   {
     id: 'prod-11',
@@ -246,7 +236,6 @@ export const INITIAL_PRODUCTS: Product[] = [
     howToUse: 'Распыляйте облаком или точечно на воротниковую зону и запястья.',
     skinType: 'Для мужчин',
     inStock: true,
-    stockCount: 11,
     isBestseller: true
   },
   {
@@ -268,7 +257,6 @@ export const INITIAL_PRODUCTS: Product[] = [
     howToUse: 'Распылите аромат вокруг себя и войдите в душистое облако.',
     skinType: 'Для женщин',
     inStock: true,
-    stockCount: 19,
     isNew: true
   }
 ];

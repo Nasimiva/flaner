@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useShop } from '../context/ShopContext';
 import { Order, OrderStatus, Product, CategoryId } from '../types';
-import { formatPrice, formatDate } from '../utils/formatters';
+import { categoryLabelById } from '../utils/categories';
+import { formatPrice, formatDate, oldPriceToSave } from '../utils/formatters';
 import { triggerHaptic } from '../utils/telegram';
+import { AdminLeads } from './AdminLeads';
+import { AdminContent } from './AdminContent';
+import { AdminJournal, AdminReport, AdminStock } from './AdminInventory';
 import {
+  ClipboardList,
   Package,
   ShoppingBag,
   BarChart3,
@@ -24,6 +29,9 @@ import {
   DollarSign,
   CreditCard,
   Layers,
+  Boxes,
+  LineChart,
+  History,
   ChevronDown,
   ChevronUp,
   ExternalLink,
@@ -34,13 +42,20 @@ import {
   Smartphone,
   QrCode,
   Copy,
-  Share2
+  Share2,
+  Check,
+  X
 } from 'lucide-react';
 
 export const AdminPanel: React.FC = () => {
   const {
     orders,
+    refreshOrders,
     products,
+    categories,
+    addCategory,
+    updateCategory,
+    deleteCategory,
     updateOrderStatus,
     addProduct,
     updateProduct,
@@ -52,12 +67,25 @@ export const AdminPanel: React.FC = () => {
     resetDemoData
   } = useShop();
 
-  const [activeTab, setActiveTab] = useState<'orders' | 'products' | 'analytics' | 'bot'>('orders');
+  const [activeTab, setActiveTab] = useState<'leads' | 'orders' | 'products' | 'stock' | 'report' | 'journal' | 'content' | 'analytics' | 'bot'>('leads');
+  const [newLeadsCount, setNewLeadsCount] = useState(0);
 
   // Orders filtering
   const [orderStatusFilter, setOrderStatusFilter] = useState<OrderStatus | 'all'>('all');
   const [orderSearchQuery, setOrderSearchQuery] = useState('');
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+
+  const changeOrderStatus = async (orderId: string, status: OrderStatus) => {
+    try {
+      await updateOrderStatus(orderId, status);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Не удалось обновить статус заказа.', 'error');
+    }
+  };
+
+  useEffect(() => {
+    refreshOrders().catch((error) => showToast(error instanceof Error ? error.message : 'Не удалось загрузить заказы.', 'error'));
+  }, []);
 
   // Telegram Bot integration state
   const [botStatus, setBotStatus] = useState<{
@@ -65,13 +93,8 @@ export const AdminPanel: React.FC = () => {
     bot?: { id: number; username: string; firstName: string; link: string };
     adminChatId?: string;
   }>({
-    connected: true,
-    bot: {
-      id: 8580114168,
-      username: 'flaneruz_bot',
-      firstName: 'Flaner cosmetics',
-      link: 'https://t.me/flaneruz_bot'
-    },
+    // Unknown until GET /api/telegram/status answers; the bot identity comes from the server, never from the bundle.
+    connected: false,
     adminChatId: ''
   });
   const [adminChatIdInput, setAdminChatIdInput] = useState('');
@@ -111,6 +134,51 @@ export const AdminPanel: React.FC = () => {
   const [formName, setFormName] = useState('');
   const [formBrand, setFormBrand] = useState('Chanel');
   const [formCategory, setFormCategory] = useState<CategoryId>('face-care');
+
+  // Category management (products tab)
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryNameUz, setNewCategoryNameUz] = useState('');
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editCategoryName, setEditCategoryName] = useState('');
+  const [editCategoryNameUz, setEditCategoryNameUz] = useState('');
+
+  const runCategoryAction = async (action: () => Promise<void>) => {
+    try {
+      await action();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Не удалось сохранить категорию.', 'error');
+    }
+  };
+
+  const handleAddCategory = () => {
+    const name = newCategoryName.trim();
+    if (!name) {
+      showToast('Укажите название категории', 'error');
+      return;
+    }
+    void runCategoryAction(async () => {
+      await addCategory(name, newCategoryNameUz.trim());
+      setNewCategoryName('');
+      setNewCategoryNameUz('');
+    });
+  };
+
+  const handleSaveCategory = (id: string) => {
+    const name = editCategoryName.trim();
+    if (!name) {
+      showToast('Укажите название категории', 'error');
+      return;
+    }
+    void runCategoryAction(async () => {
+      await updateCategory(id, name, editCategoryNameUz.trim());
+      setEditingCategoryId(null);
+    });
+  };
+
+  const handleDeleteCategory = (id: string, name: string) => {
+    if (!window.confirm(`Удалить категорию «${name}»?`)) return;
+    void runCategoryAction(() => deleteCategory(id));
+  };
   const [formPrice, setFormPrice] = useState(350000);
   const [formOldPrice, setFormOldPrice] = useState(400000);
   const [formVolume, setFormVolume] = useState('50 мл');
@@ -253,14 +321,15 @@ export const AdminPanel: React.FC = () => {
     setEditingProduct(null);
     setFormName('');
     setFormBrand('Chanel');
-    setFormCategory('face-care');
+    setFormCategory(categories[0]?.id ?? 'face-care');
     setFormPrice(450000);
     setFormOldPrice(520000);
     setFormVolume('50 мл');
-    setFormDescription('Премиальное косметическое средство для бережного ухода и совершенного сияния.');
-    setFormComposition('Aqua, Glycerin, Niacinamide, Sodium Hyaluronate, Panthenol, Camellia Sinensis Leaf Extract, Tocopherol, Phenoxyethanol.');
-    setFormHowToUse('Наносить утром и вечером на очищенную кожу легкими массажными движениями.');
-    setFormSkinType('Для всех типов кожи');
+    // Left empty on purpose: pre-filled sample text used to be saved as the product's real composition and usage.
+    setFormDescription('');
+    setFormComposition('');
+    setFormHowToUse('');
+    setFormSkinType('');
     setFormImageUrl('https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?auto=format&fit=crop&w=800&q=80');
     setIsAddProductModalOpen(true);
   };
@@ -281,36 +350,40 @@ export const AdminPanel: React.FC = () => {
     setIsAddProductModalOpen(true);
   };
 
-  const handleSaveProduct = (e: React.FormEvent) => {
+  const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName.trim()) {
       showToast('Укажите название товара', 'error');
       return;
     }
 
-    if (editingProduct) {
-      updateProduct(editingProduct.id, {
+    try {
+      if (editingProduct) {
+        await updateProduct(editingProduct.id, {
         name: formName.trim(),
         brand: formBrand,
         category: formCategory,
         price: Number(formPrice),
-        oldPrice: Number(formOldPrice),
+        // A "old price" that is not higher than the price is not a discount: leave it unset instead of saving it.
+        oldPrice: oldPriceToSave(Number(formPrice), Number(formOldPrice)),
         volume: formVolume,
         description: formDescription,
         composition: formComposition,
         howToUse: formHowToUse,
         skinType: formSkinType,
         images: [formImageUrl]
-      });
-    } else {
-      addProduct({
+        });
+      } else {
+        await addProduct({
         name: formName.trim(),
         brand: formBrand,
         category: formCategory,
         price: Number(formPrice),
-        oldPrice: Number(formOldPrice),
-        rating: 5.0,
-        reviewsCount: 1,
+        // A "old price" that is not higher than the price is not a discount: leave it unset instead of saving it.
+        oldPrice: oldPriceToSave(Number(formPrice), Number(formOldPrice)),
+        // There is no review system yet: a new product starts without a rating, so the storefront shows no stars.
+        rating: 0,
+        reviewsCount: 0,
         volume: formVolume,
         images: [formImageUrl],
         description: formDescription,
@@ -318,12 +391,29 @@ export const AdminPanel: React.FC = () => {
         howToUse: formHowToUse,
         skinType: formSkinType,
         inStock: true,
-        stockCount: 15,
         isNew: true
-      });
+        });
+      }
+      setIsAddProductModalOpen(false);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Не удалось сохранить товар.', 'error');
     }
+  };
 
-    setIsAddProductModalOpen(false);
+  const handleDeleteProduct = async (id: string) => {
+    try {
+      await deleteProduct(id);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Не удалось удалить товар.', 'error');
+    }
+  };
+
+  const handleToggleProductStock = async (id: string) => {
+    try {
+      await toggleProductStock(id);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Не удалось обновить наличие.', 'error');
+    }
   };
 
   // Export orders JSON
@@ -366,7 +456,7 @@ export const AdminPanel: React.FC = () => {
                 </span>
               </div>
               <p className="text-[11px] text-[#A89A90] hidden sm:block">
-                Управление заказами, каталогом косметики и Telegram-ботом @flaneruz_bot
+                Заявки клиентов, каталог косметики и Telegram-бот @flaneruz_bot
               </p>
             </div>
           </div>
@@ -386,16 +476,34 @@ export const AdminPanel: React.FC = () => {
         {/* Navigation Tabs */}
         <div className="flex items-center space-x-2 overflow-x-auto pb-1 no-scrollbar border-b border-[#E0D7CE]">
           <button
+            onClick={() => setActiveTab('leads')}
+            data-testid="admin-tab-leads"
+            className={`flex items-center space-x-2 px-4 py-2.5 font-semibold text-xs rounded-xl transition-all whitespace-nowrap ${
+              activeTab === 'leads'
+                ? 'bg-[#2A2421] text-white shadow-sm'
+                : 'text-[#6E5C51] hover:bg-[#EAE1D7]'
+            }`}
+          >
+            <ClipboardList className="w-4 h-4" />
+            <span>Заявки</span>
+            {newLeadsCount > 0 && (
+              <span data-testid="new-leads-badge" className="bg-[#C9A227] text-white text-[10px] px-1.5 py-0.2 rounded-full">
+                {newLeadsCount}
+              </span>
+            )}
+          </button>
+
+          <button
             onClick={() => setActiveTab('orders')}
-            className={`flex items-center space-x-2 px-4 py-2.5 font-semibold text-xs rounded-xl transition-all ${
+            className={`flex items-center space-x-2 px-4 py-2.5 font-semibold text-xs rounded-xl transition-all whitespace-nowrap ${
               activeTab === 'orders'
                 ? 'bg-[#2A2421] text-white shadow-sm'
                 : 'text-[#6E5C51] hover:bg-[#EAE1D7]'
             }`}
           >
             <Package className="w-4 h-4" />
-            <span>Заказы клиентов</span>
-            <span className="bg-white/20 text-white text-[10px] px-1.5 py-0.2 rounded-full">
+            <span>Старые заказы</span>
+            <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${activeTab === 'orders' ? 'bg-white/20 text-white' : 'bg-[#E2D8CE] text-[#52443C]'}`}>
               {orders.length}
             </span>
           </button>
@@ -413,6 +521,58 @@ export const AdminPanel: React.FC = () => {
             <span className="bg-[#E2D8CE] text-[#52443C] text-[10px] px-1.5 py-0.2 rounded-full">
               {products.length}
             </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('stock')}
+            data-testid="admin-tab-stock"
+            className={`flex items-center space-x-2 px-4 py-2.5 font-semibold text-xs rounded-xl transition-all whitespace-nowrap ${
+              activeTab === 'stock'
+                ? 'bg-[#2A2421] text-white shadow-sm'
+                : 'text-[#6E5C51] hover:bg-[#EAE1D7]'
+            }`}
+          >
+            <Boxes className="w-4 h-4" />
+            <span>Склад</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('report')}
+            data-testid="admin-tab-report"
+            className={`flex items-center space-x-2 px-4 py-2.5 font-semibold text-xs rounded-xl transition-all whitespace-nowrap ${
+              activeTab === 'report'
+                ? 'bg-[#2A2421] text-white shadow-sm'
+                : 'text-[#6E5C51] hover:bg-[#EAE1D7]'
+            }`}
+          >
+            <LineChart className="w-4 h-4" />
+            <span>Отчёт</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('journal')}
+            data-testid="admin-tab-journal"
+            className={`flex items-center space-x-2 px-4 py-2.5 font-semibold text-xs rounded-xl transition-all whitespace-nowrap ${
+              activeTab === 'journal'
+                ? 'bg-[#2A2421] text-white shadow-sm'
+                : 'text-[#6E5C51] hover:bg-[#EAE1D7]'
+            }`}
+          >
+            <History className="w-4 h-4" />
+            <span>Журнал</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('content')}
+            data-testid="admin-tab-content"
+            className={`flex items-center space-x-2 px-4 py-2.5 font-semibold text-xs rounded-xl transition-all whitespace-nowrap ${
+              activeTab === 'content'
+                ? 'bg-[#2A2421] text-white shadow-sm'
+                : 'text-[#6E5C51] hover:bg-[#EAE1D7]'
+            }`}
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>Контент</span>
           </button>
 
           <button
@@ -440,7 +600,18 @@ export const AdminPanel: React.FC = () => {
           </button>
         </div>
 
-        {/* TAB 1: ORDERS DASHBOARD */}
+        {/* TAB 0: LEADS (заявки) */}
+        {activeTab === 'leads' && <AdminLeads onNewCount={setNewLeadsCount} />}
+
+        {/* Inventory (admin only): warehouse, monthly report, movement journal */}
+        {activeTab === 'stock' && <AdminStock />}
+        {activeTab === 'report' && <AdminReport />}
+        {activeTab === 'journal' && <AdminJournal />}
+
+        {/* Editable storefront content: hero banners and brand strip */}
+        {activeTab === 'content' && <AdminContent />}
+
+        {/* TAB 1: ORDERS DASHBOARD (legacy orders, kept until the old API is removed) */}
         {activeTab === 'orders' && (
           <div className="space-y-4">
             {/* Filter and Search Bar */}
@@ -604,7 +775,7 @@ export const AdminPanel: React.FC = () => {
                           {order.status === 'new' && (
                             <button
                               onClick={() => {
-                                updateOrderStatus(order.id, 'processing');
+                                void changeOrderStatus(order.id, 'processing');
                                 handleSimulateBotNotification(order, 'В сборке');
                               }}
                               className="px-2.5 py-1 bg-[#2A2421] text-white text-[11px] font-semibold rounded-lg hover:bg-[#3D3531]"
@@ -615,7 +786,7 @@ export const AdminPanel: React.FC = () => {
                           {order.status === 'processing' && (
                             <button
                               onClick={() => {
-                                updateOrderStatus(order.id, 'shipped');
+                                void changeOrderStatus(order.id, 'shipped');
                                 handleSimulateBotNotification(order, 'В пути к вам (передан курьеру)');
                               }}
                               className="px-2.5 py-1 bg-purple-700 text-white text-[11px] font-semibold rounded-lg hover:bg-purple-800"
@@ -626,7 +797,7 @@ export const AdminPanel: React.FC = () => {
                           {order.status === 'shipped' && (
                             <button
                               onClick={() => {
-                                updateOrderStatus(order.id, 'delivered');
+                                void changeOrderStatus(order.id, 'delivered');
                                 handleSimulateBotNotification(order, 'Доставлен! Спасибо за заказ');
                               }}
                               className="px-2.5 py-1 bg-emerald-700 text-white text-[11px] font-semibold rounded-lg hover:bg-emerald-800"
@@ -636,7 +807,7 @@ export const AdminPanel: React.FC = () => {
                           )}
                           {order.status !== 'cancelled' && order.status !== 'delivered' && (
                             <button
-                              onClick={() => updateOrderStatus(order.id, 'cancelled')}
+                              onClick={() => void changeOrderStatus(order.id, 'cancelled')}
                               className="px-2 py-1 bg-[#F5EFEB] text-[#A64B2A] hover:bg-[#EAE1D7] text-[11px] font-semibold rounded-lg"
                             >
                               Отменить
@@ -703,6 +874,97 @@ export const AdminPanel: React.FC = () => {
               </button>
             </div>
 
+            {/* Categories management */}
+            <div className="bg-white p-4 rounded-2xl border border-[#EAE3DC] shadow-xs space-y-3" data-testid="admin-categories">
+              <div>
+                <h3 className="text-sm font-bold text-[#2A2421]">Категории товаров</h3>
+                <p className="text-[11px] text-[#8A796F]">Категории показываются в магазине и в форме товара. Название на узбекском необязательно.</p>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {categories.map((category) => {
+                  const count = products.filter((p) => p.category === category.id).length;
+                  return editingCategoryId === category.id ? (
+                    <div key={category.id} className="flex flex-wrap items-center gap-1.5 bg-[#FAF8F5] border border-[#2A2421] rounded-xl p-1.5">
+                      <input
+                        type="text"
+                        value={editCategoryName}
+                        onChange={(e) => setEditCategoryName(e.target.value)}
+                        placeholder="Название"
+                        maxLength={60}
+                        className="w-36 px-2 py-1 text-xs bg-white border border-[#DFD6CD] rounded-lg"
+                      />
+                      <input
+                        type="text"
+                        value={editCategoryNameUz}
+                        onChange={(e) => setEditCategoryNameUz(e.target.value)}
+                        placeholder="Nomi (uz)"
+                        maxLength={60}
+                        className="w-36 px-2 py-1 text-xs bg-white border border-[#DFD6CD] rounded-lg"
+                      />
+                      <button onClick={() => handleSaveCategory(category.id)} title="Сохранить" className="p-1.5 rounded-lg bg-[#2A2421] text-white">
+                        <Check className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => setEditingCategoryId(null)} title="Отмена" className="p-1.5 rounded-lg bg-[#F5EFEB] text-[#4A3E37]">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div key={category.id} className="flex items-center gap-1.5 bg-[#F3ECE5] text-[#2A2421] rounded-full pl-3 pr-1.5 py-1 text-xs font-medium">
+                      <span>{category.name}</span>
+                      <span className="text-[10px] text-[#7A6B62]">({count})</span>
+                      <button
+                        onClick={() => {
+                          setEditingCategoryId(category.id);
+                          setEditCategoryName(category.name);
+                          setEditCategoryNameUz(category.nameUz);
+                        }}
+                        title="Переименовать"
+                        className="p-1 rounded-full hover:bg-white/70"
+                      >
+                        <Edit2 className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteCategory(category.id, category.name)}
+                        title="Удалить категорию"
+                        className="p-1 rounded-full hover:bg-white/70 text-[#A64B2A]"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-[#F2ECE5]">
+                <input
+                  type="text"
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleAddCategory(); }}
+                  placeholder="Новая категория, например: Уход за волосами"
+                  maxLength={60}
+                  className="flex-1 px-3 py-2 text-xs bg-[#FAF8F5] border border-[#DFD6CD] rounded-xl focus:outline-none focus:border-[#2A2421]"
+                />
+                <input
+                  type="text"
+                  value={newCategoryNameUz}
+                  onChange={(e) => setNewCategoryNameUz(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleAddCategory(); }}
+                  placeholder="Nomi o'zbekcha (необязательно)"
+                  maxLength={60}
+                  className="flex-1 px-3 py-2 text-xs bg-[#FAF8F5] border border-[#DFD6CD] rounded-xl focus:outline-none focus:border-[#2A2421]"
+                />
+                <button
+                  onClick={handleAddCategory}
+                  className="bg-[#2A2421] hover:bg-[#3D3531] text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 shrink-0"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Добавить категорию</span>
+                </button>
+              </div>
+            </div>
+
             {/* Products Table/Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
               {filteredProducts.map((p) => (
@@ -733,15 +995,11 @@ export const AdminPanel: React.FC = () => {
                   {/* Stock and Category */}
                   <div className="flex items-center justify-between text-[11px] pt-2 border-t border-[#F2ECE5]">
                     <span className="bg-[#F3ECE5] text-[#5A4D44] px-2 py-0.5 rounded-full font-medium">
-                      {p.category === 'face-care'
-                        ? 'Уход за лицом'
-                        : p.category === 'makeup'
-                        ? 'Декоративная'
-                        : 'Парфюмерия'}
+                      {categoryLabelById(categories, p.category, 'ru')}
                     </span>
 
                     <button
-                      onClick={() => toggleProductStock(p.id)}
+                      onClick={() => handleToggleProductStock(p.id)}
                       className={`px-2 py-0.5 rounded-full font-semibold transition-colors ${
                         p.inStock
                           ? 'bg-emerald-100 text-emerald-800'
@@ -762,7 +1020,7 @@ export const AdminPanel: React.FC = () => {
                       <span>Изменить</span>
                     </button>
                     <button
-                      onClick={() => deleteProduct(p.id)}
+                      onClick={() => handleDeleteProduct(p.id)}
                       className="w-8 h-8 rounded-lg bg-[#FAF0ED] hover:bg-[#F7E3DC] text-[#A64B2A] flex items-center justify-center"
                       title="Удалить товар"
                     >
@@ -908,7 +1166,7 @@ export const AdminPanel: React.FC = () => {
                   className="bg-[#F5EFEB] text-[#A64B2A] hover:bg-[#EAE1D7] px-4 py-2 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition-colors"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Сбросить к демо-данным</span>
+                  <span>Обновить данные</span>
                 </button>
               </div>
             </div>
@@ -930,13 +1188,19 @@ export const AdminPanel: React.FC = () => {
                       <h3 className="text-base font-bold text-[#2A2421]">
                         {botStatus.bot?.firstName || 'Flaner cosmetics'}
                       </h3>
-                      <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800">
-                        <CheckCircle className="w-3 h-3" />
-                        <span>API Подключен</span>
-                      </span>
+                      {botStatus.connected ? (
+                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800">
+                          <CheckCircle className="w-3 h-3" />
+                          <span>API Подключен</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800">
+                          <span>Нет связи с Telegram API</span>
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-[#7A6B62] mt-0.5">
-                      Telegram Бот: <strong className="text-[#2A2421]">@{botStatus.bot?.username || 'flaneruz_bot'}</strong> (ID: {botStatus.bot?.id || '8580114168'})
+                      Telegram Бот: <strong className="text-[#2A2421]">@{botStatus.bot?.username || 'flaneruz_bot'}</strong> {botStatus.bot?.id ? `(ID: ${botStatus.bot.id})` : null}
                     </p>
                   </div>
                 </div>
@@ -964,23 +1228,14 @@ export const AdminPanel: React.FC = () => {
                 </div>
               </div>
 
-              {/* Token Display Banner */}
+              {/* The bot token is a server secret (TELEGRAM_BOT_TOKEN). It is never sent to or shown in the browser. */}
               <div className="p-4 bg-[#FAF8F5] rounded-2xl border border-[#EAE3DC] space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-[#52443C] flex items-center space-x-1.5">
-                    <Key className="w-3.5 h-3.5 text-[#C9A227]" />
-                    <span>Активный Telegram Bot Token:</span>
-                  </span>
-                  <span className="text-[11px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                    Авторизован в Telegram API
-                  </span>
-                </div>
-                <div className="font-mono text-xs text-[#2A2421] bg-white px-3 py-2 rounded-xl border border-[#DFD6CD] break-all select-all flex items-center justify-between">
-                  <span>8580114168:AAEQuUmq5pVHd0B50syGwJ1pS5BGh4XXgVc</span>
-                  <span className="text-[10px] text-[#8A796F] font-sans ml-2 shrink-0">Bot ID: 8580114168</span>
-                </div>
+                <span className="text-xs font-semibold text-[#52443C] flex items-center space-x-1.5">
+                  <Key className="w-3.5 h-3.5 text-[#C9A227]" />
+                  <span>Токен Telegram-бота</span>
+                </span>
                 <p className="text-[11px] text-[#8A796F]">
-                  Токен привязан к серверу и используется для отправки карточек заказов администратору и push-уведомлений покупателям.
+                  Токен хранится только на сервере в переменной окружения TELEGRAM_BOT_TOKEN и в панели не показывается. Он используется для отправки карточек заявок администратору и уведомлений покупателям.
                 </p>
               </div>
 
@@ -1025,15 +1280,6 @@ export const AdminPanel: React.FC = () => {
                   >
                     <Send className="w-3.5 h-3.5" />
                     <span>Отправить в чат</span>
-                  </a>
-                  <a
-                    href="/flaner-cosmetics.zip"
-                    download="flaner-cosmetics.zip"
-                    className="bg-[#5C4515] hover:bg-[#46340F] text-white px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center justify-center space-x-1.5 transition-colors shrink-0"
-                    title="Скачать ZIP архив для VS Code"
-                  >
-                    <Download className="w-3.5 h-3.5 text-[#E8DCBF]" />
-                    <span>Скачать .ZIP для VS Code</span>
                   </a>
                 </div>
               </div>
@@ -1288,9 +1534,13 @@ export const AdminPanel: React.FC = () => {
                     onChange={(e) => setFormCategory(e.target.value as CategoryId)}
                     className="w-full px-3 py-2 bg-[#FAF8F5] border border-[#DFD6CD] rounded-xl"
                   >
-                    <option value="face-care">Уход за лицом</option>
-                    <option value="makeup">Декоративная косметика</option>
-                    <option value="perfume">Парфюмерия</option>
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.id}>{category.name}</option>
+                    ))}
+                    {/* A product whose category was removed keeps a visible option instead of silently switching. */}
+                    {!categories.some((category) => category.id === formCategory) && (
+                      <option value={formCategory}>{formCategory}</option>
+                    )}
                   </select>
                 </div>
               </div>
@@ -1356,6 +1606,32 @@ export const AdminPanel: React.FC = () => {
                   rows={2}
                   value={formDescription}
                   onChange={(e) => setFormDescription(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#FAF8F5] border border-[#DFD6CD] rounded-xl"
+                />
+              </div>
+
+              <div>
+                <label className="font-medium text-[#6E5C51] block mb-1">
+                  Применение (как использовать):
+                </label>
+                <textarea
+                  rows={2}
+                  value={formHowToUse}
+                  onChange={(e) => setFormHowToUse(e.target.value)}
+                  placeholder="Наносить утром и вечером на очищенную кожу..."
+                  className="w-full px-3 py-2 bg-[#FAF8F5] border border-[#DFD6CD] rounded-xl"
+                />
+              </div>
+
+              <div>
+                <label className="font-medium text-[#6E5C51] block mb-1">
+                  Тип кожи:
+                </label>
+                <input
+                  type="text"
+                  value={formSkinType}
+                  onChange={(e) => setFormSkinType(e.target.value)}
+                  placeholder="Для всех типов кожи"
                   className="w-full px-3 py-2 bg-[#FAF8F5] border border-[#DFD6CD] rounded-xl"
                 />
               </div>
