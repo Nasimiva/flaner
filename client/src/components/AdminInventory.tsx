@@ -314,7 +314,7 @@ export const AdminStock: React.FC = () => {
                     {categoryLabelById(categories, item.category, 'ru')}{item.volume ? ` • ${item.volume}` : ''} • цена {formatSum(item.price)} • закупка {item.costPrice > 0 ? formatSum(item.costPrice) : 'не указана'}
                   </div>
                   {item.stockCount > 0 && !item.inStock && <div className="text-[11px] text-amber-700 mt-0.5">Остаток есть, но на сайте помечен «Нет в наличии» (вкладка «Товары»).</div>}
-                  {item.stockCount === 0 && item.inStock && <div className="text-[11px] text-amber-700 mt-0.5">Остаток 0, но на сайте помечен «В наличии». Сделайте приход или пересчёт.</div>}
+                  {item.stockCount === 0 && item.inStock && <div className="text-[11px] text-amber-700 mt-0.5">Остаток 0 — на сайте показывается «Нет в наличии». Сделайте приход или пересчёт, чтобы товар снова можно было заказать.</div>}
                 </div>
                 <StockBadge count={item.stockCount} />
                 <div className="flex flex-wrap gap-2">
