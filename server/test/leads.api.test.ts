@@ -177,8 +177,9 @@ before(async () => {
       [id, name, price, inStock, stock]
     );
   await product('p-a', 'Serum A', 100000, true, 5);
-  await product('p-b', 'Cream B', 250000, true, 0); // in_stock but stock_count 0: a lead must still be accepted
+  await product('p-b', 'Cream B', 250000, true, 2);
   await product('p-c', 'Gone C', 90000, false, 0);
+  await product('p-d', 'Empty D', 120000, true, 0); // flag still on, but nothing left in the warehouse: unavailable
   BASE = await startServer(await freePort());
   cookie = await adminLogin();
 });
@@ -390,7 +391,30 @@ describe('POST /api/leads', () => {
   it('accepts a quantity above stock_count because leads reserve nothing', async () => {
     const res = await postLead(validLead({ items: [{ productId: 'p-b', quantity: 20 }] }));
     assert.equal(res.status, 201);
-    assert.equal((await db.query("SELECT stock_count FROM products WHERE id = 'p-b'")).rows[0].stock_count, 0);
+    assert.equal((await db.query("SELECT stock_count FROM products WHERE id = 'p-b'")).rows[0].stock_count, 2);
+  });
+
+  it('rejects a product with an empty warehouse even though its in_stock flag is still on, and rewrites nothing', async () => {
+    const before = await leadCount();
+    const rowBefore = (await db.query("SELECT stock_count, in_stock FROM products WHERE id = 'p-d'")).rows[0];
+    const res = await postLead(validLead({ items: [{ productId: 'p-a', quantity: 1 }, { productId: 'p-d', quantity: 1 }] }));
+    assert.equal(res.status, 409);
+    assert.equal(res.json.code, 'out_of_stock');
+    assert.deepEqual(res.json.details.productIds, ['p-d']);
+    assert.equal(await leadCount(), before);
+    assert.deepEqual((await db.query("SELECT stock_count, in_stock FROM products WHERE id = 'p-d'")).rows[0], rowBefore, 'stored data untouched');
+  });
+
+  it('shows shoppers "out of stock" when the warehouse is empty or the flag is off, without exposing the quantity', async () => {
+    const catalog = await call('GET', '/api/products');
+    assert.equal(catalog.status, 200);
+    const flag = (id: string) => catalog.json.find((p: any) => p.id === id).inStock;
+    assert.equal(flag('p-a'), true, 'flag on and stock left');
+    assert.equal(flag('p-b'), true, 'flag on and stock left');
+    assert.equal(flag('p-c'), false, 'flag off');
+    assert.equal(flag('p-d'), false, 'flag on but stock is 0');
+    assert.equal(catalog.json.some((p: any) => 'stockCount' in p || 'stock_count' in p), false);
+    assert.equal((await db.query("SELECT in_stock FROM products WHERE id = 'p-d'")).rows[0].in_stock, true, 'the stored flag is not rewritten');
   });
 
   it('is idempotent: the same key and payload returns the same lead (200, replayed)', async () => {
@@ -1182,6 +1206,8 @@ describe('inventory and sales', () => {
 // ---------------------------------------------------------------------------------------------
 describe('rate limiting', () => {
   it('limits POST /api/leads per client, returns 429 JSON with headers, and leaves admin routes alone', async () => {
+    // The warehouse was zeroed by an earlier suite, and an empty warehouse now means "unavailable" for shoppers.
+    await db.query("UPDATE products SET stock_count = 5 WHERE id = 'p-a'");
     const base = await startServer(await freePort(), { LEADS_RATE_LIMIT_MAX: '3', LEADS_RATE_LIMIT_WINDOW_MINUTES: '15' });
     const statuses: number[] = [];
     let last;
