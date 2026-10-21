@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useShop } from '../context/ShopContext';
 import { Order, OrderStatus, Product, CategoryId } from '../types';
 import { categoryLabelById } from '../utils/categories';
+import { checkProduct, productWarnings } from '../utils/productCheck';
 import { formatPrice, formatDate, oldPriceToSave } from '../utils/formatters';
 import { triggerHaptic } from '../utils/telegram';
 import { AdminLeads } from './AdminLeads';
@@ -320,7 +321,8 @@ export const AdminPanel: React.FC = () => {
   const handleOpenAddModal = () => {
     setEditingProduct(null);
     setFormName('');
-    setFormBrand('Chanel');
+    // Empty on purpose: a pre-filled brand was saved unchanged on products of other brands.
+    setFormBrand('');
     setFormCategory(categories[0]?.id ?? 'face-care');
     setFormPrice(450000);
     setFormOldPrice(520000);
@@ -350,10 +352,18 @@ export const AdminPanel: React.FC = () => {
     setIsAddProductModalOpen(true);
   };
 
+  // Brand written in the name vs the brand field, product type in the name vs the category (warning only, never blocks).
+  const formProduct = { name: formName, brand: formBrand, category: formCategory, description: formDescription };
+  const formCheck = formName.trim() ? checkProduct(formProduct, categories) : null;
+  const formWarnings = formName.trim() ? productWarnings(formProduct, categories) : [];
+
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName.trim()) {
       showToast('Укажите название товара', 'error');
+      return;
+    }
+    if (formWarnings.length > 0 && !window.confirm(`Проверьте товар:\n\n${formWarnings.join('\n')}\n\nСохранить всё равно?`)) {
       return;
     }
 
@@ -1647,6 +1657,29 @@ export const AdminPanel: React.FC = () => {
                   className="w-full px-3 py-2 bg-[#FAF8F5] border border-[#DFD6CD] rounded-xl"
                 />
               </div>
+
+              {formWarnings.length > 0 && (
+                <div role="alert" data-testid="product-check-warning" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-amber-900 space-y-2">
+                  <p className="font-bold">Проверьте бренд и категорию</p>
+                  <ul className="list-disc pl-4 space-y-0.5">
+                    {formWarnings.map((warning) => <li key={warning}>{warning}</li>)}
+                  </ul>
+                  <div className="flex flex-wrap gap-1.5">
+                    {formCheck?.brand.kind === 'mismatch' && formCheck.brand.suggested && (
+                      <button type="button" onClick={() => setFormBrand(formCheck.brand.suggested!)}
+                        className="px-2.5 py-1 rounded-lg bg-white border border-amber-300 font-semibold">
+                        Бренд: {formCheck.brand.suggested}
+                      </button>
+                    )}
+                    {formCheck?.category.kind === 'mismatch' && formCheck.category.suggested && (
+                      <button type="button" onClick={() => setFormCategory(formCheck.category.suggested! as CategoryId)}
+                        className="px-2.5 py-1 rounded-lg bg-white border border-amber-300 font-semibold">
+                        Категория: {categoryLabelById(categories, formCheck.category.suggested, 'ru')}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div className="pt-2 flex gap-2">
                 <button
